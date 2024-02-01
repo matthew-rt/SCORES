@@ -1319,12 +1319,13 @@ class OnshoreWindModel(GenerationModel):
         loadtimes = []
         for si in range(len(self.sites)):
             site = self.sites[si]
-            site_speeds = []
             # since extending the data back to 1980, loading has become a real bottleneck. Previous, the data is loaded in, and then
             # stepped through in series, to check when the datetime matches the first year in the time series, and the first operational
             # date for the wind turbine. However, assuming we can work out these two numbers, we can just load the data in, and then
             # slice it to the correct time period. This is much faster.
             # We assume here that each datafile starts on the same date, which should be the case.
+
+            #
 
             if self.firstdatadatetime == False:
                 with open(self.data_path + str(site) + ".csv", "r") as file:
@@ -1352,25 +1353,54 @@ class OnshoreWindModel(GenerationModel):
             else:
                 rangeselectorindex = operationalindex
 
-            site_speeds = np.loadtxt(
+            # there has been a substantial redesign to how we calculate the wind speed. Instead of using one value, we now make use of a
+            # pre-computed fit, and calculate for the required hub height.
+
+            #### PREVIOUS APPROACH
+
+            # site_speeds = np.loadtxt(
+            #     self.data_path + str(site) + ".csv",
+            #     delimiter=",",
+            #     skiprows=1,
+            #     usecols=(2),
+            # )
+            # site_speeds = site_speeds[
+            #     rangeselectorindex : self.loadindex + len(self.n_good_points)
+            # ]
+            # # neededdata=splitdata[self.loadindex:self.loadindex+len(self.n_good_points)]
+            # # neededdata=splitdata[operationalindex:self.loadindex+len(self.n_good_points)]
+
+            # site_speeds = site_speeds.astype(float)
+            # site_speeds[site_speeds < 0] = 0
+
+            # # adjusts the wind speeds to hub height
+            # site_speeds = site_speeds * np.power(
+            #     self.hub_height / self.data_height, self.alpha
+            # )
+
+            #########################################
+            #########################################
+            #########################################
+            #########################################
+            fit_data = np.loadtxt(
                 self.data_path + str(site) + ".csv",
                 delimiter=",",
                 skiprows=1,
-                usecols=(2),
+                usecols=(2, 3, 4, 5),
             )
-            site_speeds = site_speeds[
+            # loads in our fit data
+            # selects the data which is after the first operational date, and before the last date in the simulation
+            fit_data = fit_data[
                 rangeselectorindex : self.loadindex + len(self.n_good_points)
             ]
-            # neededdata=splitdata[self.loadindex:self.loadindex+len(self.n_good_points)]
-            # neededdata=splitdata[operationalindex:self.loadindex+len(self.n_good_points)]
 
-            site_speeds = site_speeds.astype(float)
-            site_speeds[site_speeds < 0] = 0
-
-            # adjusts the wind speeds to hub height
-            site_speeds = site_speeds * np.power(
-                self.hub_height / self.data_height, self.alpha
+            # calculates the speed at hub height using the fit terms in the csv
+            site_speeds = (
+                fit_data[:, 0]
+                * np.log((self.hub_height - fit_data[:, 3]) / fit_data[:, 1])
+                + fit_data[:, 2]
             )
+
             site_speeds[site_speeds > v[-1]] = v[-1]  # prevents overload
             p1s = np.floor(site_speeds / 0.1).astype(
                 int
