@@ -758,41 +758,69 @@ class OffshoreWindModel(GenerationModel):
             else:
                 rangeselectorindex = operationalindex
 
+            
+            
+            ##OLD APPROACH
             #
             # Merra format:
-            #
-            site_speeds = np.loadtxt(
-                self.data_path + str(site) + ".csv",
-                delimiter=",",
-                skiprows=1,
-                usecols=(2),
-            )
-            #
-            # Met office format, uncomment to use: it uses a different column to the MERRA format
             #
             # site_speeds = np.loadtxt(
             #     self.data_path + str(site) + ".csv",
             #     delimiter=",",
             #     skiprows=1,
-            #     usecols=(6),
+            #     usecols=(2),
             # )
+            # #
+            # # Met office format, uncomment to use: it uses a different column to the MERRA format
+            # #
+            # # site_speeds = np.loadtxt(
+            # #     self.data_path + str(site) + ".csv",
+            # #     delimiter=",",
+            # #     skiprows=1,
+            # #     usecols=(6),
+            # # )
 
-            site_speeds = site_speeds[
-                rangeselectorindex : self.loadindex + len(self.n_good_points)
-            ]
+            # site_speeds = site_speeds[
+            #     rangeselectorindex : self.loadindex + len(self.n_good_points)
+            # ]
+
+            ###############
+
 
             # the approach hass been changed to vectorise the calculation of power output
             # this is done by loading all the wind speeds into an array and then calculating
             # the power output for each point in the array. This is much faster than the previous
             # approach of calculating each point individually
-            site_speeds = np.array(site_speeds)
-            site_speeds = site_speeds.astype(float)
-            site_speeds[site_speeds < 0] = 0
+            # site_speeds = np.array(site_speeds)
+            # site_speeds = site_speeds.astype(float)
+            # site_speeds[site_speeds < 0] = 0
 
-            # adjusts the wind speeds to hub height
-            site_speeds = site_speeds * np.power(
-                self.hub_height / self.data_height, self.alpha
+            # # adjusts the wind speeds to hub height
+            # site_speeds = site_speeds * np.power(
+            #     self.hub_height / self.data_height, self.alpha
+            # )
+                
+            #new approach
+
+            fit_data = np.loadtxt(
+                self.data_path + str(site) + ".csv",
+                delimiter=",",
+                skiprows=1,
+                usecols=(2, 3, 4, 5),
             )
+            # loads in our fit data
+            # selects the data which is after the first operational date, and before the last date in the simulation
+            fit_data = fit_data[
+                rangeselectorindex : self.loadindex + len(self.n_good_points)
+            ]
+
+            # calculates the speed at hub height using the fit terms in the csv
+            site_speeds = (
+                fit_data[:, 0]
+                * np.log((self.hub_height - fit_data[:, 3]) / fit_data[:, 1])
+                + fit_data[:, 2]
+            )
+
             site_speeds[site_speeds > v[-1]] = v[-1]  # prevents overload
             p1s = np.floor(site_speeds / 0.1).astype(
                 int
