@@ -345,6 +345,7 @@ class DispatchableGenerator(GenerationModel):
         month_online=None,
         capacities=[1000],
         limits=[0, 1000000],
+        ramprate=0.25,
     ):
         """
         == description ==
@@ -370,6 +371,7 @@ class DispatchableGenerator(GenerationModel):
         month_online: list(int) month the generation unit was installed, at each site
         capacities: (Array <float>) installed capacity of each site in MW
         limits: (Array<float>) used to define the max and min installed generation in MW ([min,max])
+        ramprate: (float) ramp rate of the generation unit in % of full capacity per hour (0-1)
         == returns ==
         None
         """
@@ -400,6 +402,7 @@ class DispatchableGenerator(GenerationModel):
         self.max_possible_output = self.total_installed_capacity * len(
             self.power_out_array
         )
+        self.ramp_rate = ramprate
 
     def __str__(self):
         return f"{self.plant_type} Generator, total capacity: {self.total_installed_capacity} MW"
