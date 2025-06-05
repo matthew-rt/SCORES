@@ -233,9 +233,7 @@ class StorageModel:
         )
         self.discharge_fixed_cost = dischargefixedcost
         self.discharge_variable_cost = dischargeVarOpex
-        print(f"Storage fixed cost: {storagefixedcost}")
-        print(f"Charge fixed cost: {chargefixedcost*max_c_rate/100}")
-        print(f"Discharge fixed cost: {dischargefixedcost*max_d_rate/100}")
+
         self.variable_cost = sum([storageVarOpex, chargeVarOpex, dischargeVarOpex])
         self.fixed_cost = (
             storagefixedcost
@@ -687,6 +685,7 @@ class BatteryStorageModel(StorageModel):
         max_c_rate=25,
         max_d_rate=25,
         capacity=1,
+        limits=[0, 1000000000],
     ):
         super().__init__(
             cost_params_file=None,
@@ -711,7 +710,7 @@ class BatteryStorageModel(StorageModel):
             max_d_rate=max_d_rate,
             name="Li-Ion Battery",
             capacity=capacity,
-            limits=[0, 1000000000],
+            limits=limits,
         )
 
 
