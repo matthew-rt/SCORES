@@ -760,8 +760,25 @@ class System_LinProg_Model:
         stor_limits_lower = []
         stor_limits_upper = []
         for i in model.StorageIndex:
-            stor_limits_lower.append(self.Mult_Stor.assets[i].limits[0])
-            stor_limits_upper.append(self.Mult_Stor.assets[i].limits[1])
+            stor_limits_lower.append(self.Mult_Stor.assets[i].storagelimits[0])
+            stor_limits_upper.append(self.Mult_Stor.assets[i].storagelimits[1])
+
+        stor_discharge_limits_lower = []
+        stor_discharge_limits_upper = []
+        for i in model.StorageIndex:
+            stor_discharge_limits_lower.append(
+                self.Mult_Stor.assets[i].dischargelimits[0]
+            )
+            stor_discharge_limits_upper.append(
+                self.Mult_Stor.assets[i].dischargelimits[1]
+            )
+
+        stor_charge_limits_lower = []
+        stor_charge_limits_upper = []
+        for i in model.StorageIndex:
+            stor_charge_limits_lower.append(self.Mult_Stor.assets[i].chargelimits[0])
+            stor_charge_limits_upper.append(self.Mult_Stor.assets[i].chargelimits[1])
+
         model.Stor_Limit_Param_Lower = pyo.Param(
             model.StorageIndex,
             within=pyo.NonNegativeReals,
@@ -773,6 +790,38 @@ class System_LinProg_Model:
             within=pyo.NonNegativeReals,
             mutable=True,
             initialize=dict(enumerate(stor_limits_upper)),
+        )
+
+        model.Stor_Discharge_Limit_Param_Lower = pyo.Param(
+            model.StorageIndex,
+            within=pyo.NonNegativeReals,
+            mutable=False,
+            initialize=dict(enumerate(stor_discharge_limits_lower)),
+        )
+        model.Stor_Discharge_Limit_Param_Upper = pyo.Param(
+            model.StorageIndex,
+            within=pyo.NonNegativeReals,
+            mutable=False,
+            initialize=dict(enumerate(stor_discharge_limits_upper)),
+        )
+        model.Stor_Charge_Limit_Param_Lower = pyo.Param(
+            model.StorageIndex,
+            within=pyo.NonNegativeReals,
+            mutable=False,
+            initialize=dict(enumerate(stor_charge_limits_lower)),
+        )
+
+        model.Stor_Charge_Limit_Param_Upper = pyo.Param(
+            model.StorageIndex,
+            within=pyo.NonNegativeReals,
+            mutable=False,
+            initialize=dict(enumerate(stor_charge_limits_upper)),
+        )
+
+        model.Stor_Installed_Discharge = pyo.Var(
+            model.StorageIndex,
+            within=pyo.NonNegativeReals,
+            initialize=dict(enumerate(stor_discharge_limits_lower)),
         )
 
         # Charger Type Limits #
@@ -966,12 +1015,22 @@ class System_LinProg_Model:
         model.maxD = pyo.ConstraintList()
         model.maxC = pyo.ConstraintList()
         model.storagelimits = pyo.ConstraintList()
+        model.installed_discharge_limits = pyo.ConstraintList()
+        model.hourly_discharge_limits = pyo.ConstraintList()
         for i in range(self.Mult_Stor.n_assets):
             model.storagelimits.add(
                 model.BuiltCapacity[i] >= model.Stor_Limit_Param_Lower[i]
             )
             model.storagelimits.add(
                 model.BuiltCapacity[i] <= model.Stor_Limit_Param_Upper[i]
+            )
+            model.installed_discharge_limits.add(
+                model.Stor_Installed_Discharge[i]
+                >= model.Stor_Discharge_Limit_Param_Lower[i]
+            )
+            model.installed_discharge_limits.add(
+                model.Stor_Installed_Discharge[i]
+                <= model.Stor_Discharge_Limit_Param_Upper[i]
             )
 
             for t in range(timehorizon):
@@ -991,6 +1050,10 @@ class System_LinProg_Model:
                     / 100
                 )
 
+                model.hourly_discharge_limits.add(
+                    model.D[i, t] * self.Mult_Stor.assets[i].eff_out / 100.0
+                    <= model.Stor_Installed_Discharge[i]
+                )
                 if t == 0:
                     if InitialSOC[0] >= 0.0:
                         model.battery_charge_level.add(
@@ -1220,9 +1283,7 @@ class System_LinProg_Model:
                     + np.max([pyo.value(model.C[i, t]) for t in model.TimeIndex])
                     / (self.Mult_Stor.assets[i].eff_in / 100.0)
                     * model.StorChargeCosts[i, 0]
-                    + np.max([pyo.value(model.D[i, t]) for t in model.TimeIndex])
-                    * (self.Mult_Stor.assets[i].eff_out / 100.0)
-                    * model.StorDischargeCosts[i, 0]
+                    + model.Stor_Installed_Discharge[i] * model.StorDischargeCosts[i, 0]
                 )
                 for i in model.StorageIndex
             )
