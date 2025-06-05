@@ -823,7 +823,11 @@ class System_LinProg_Model:
             within=pyo.NonNegativeReals,
             initialize=dict(enumerate(stor_discharge_limits_lower)),
         )
-
+        model.Stor_Installed_Charge = pyo.Var(
+            model.StorageIndex,
+            within=pyo.NonNegativeReals,
+            initialize=dict(enumerate(stor_charge_limits_lower)),
+        )
         # Charger Type Limits #
         V2G_limits_lower = []
         V2G_limits_upper = []
@@ -1017,6 +1021,8 @@ class System_LinProg_Model:
         model.storagelimits = pyo.ConstraintList()
         model.installed_discharge_limits = pyo.ConstraintList()
         model.hourly_discharge_limits = pyo.ConstraintList()
+        model.installed_charge_limits = pyo.ConstraintList()
+        model.hourly_charge_limits = pyo.ConstraintList()
         for i in range(self.Mult_Stor.n_assets):
             model.storagelimits.add(
                 model.BuiltCapacity[i] >= model.Stor_Limit_Param_Lower[i]
@@ -1032,7 +1038,12 @@ class System_LinProg_Model:
                 model.Stor_Installed_Discharge[i]
                 <= model.Stor_Discharge_Limit_Param_Upper[i]
             )
-
+            model.installed_charge_limits.add(
+                model.Stor_Installed_Charge[i] <= model.Stor_Charge_Limit_Param_Upper[i]
+            )
+            model.installed_charge_limits.add(
+                model.Stor_Installed_Charge[i] >= model.Stor_Charge_Limit_Param_Lower[i]
+            )
             for t in range(timehorizon):
                 model.maxSOC.add(
                     model.SOC[i, t] <= model.BuiltCapacity[i]
@@ -1054,6 +1065,11 @@ class System_LinProg_Model:
                     model.D[i, t] * self.Mult_Stor.assets[i].eff_out / 100.0
                     <= model.Stor_Installed_Discharge[i]
                 )
+                model.hourly_charge_limits.add(
+                    model.C[i, t] * 100.0 / self.Mult_Stor.assets[i].eff_in
+                    <= model.Stor_Installed_Charge[i]
+                )
+
                 if t == 0:
                     if InitialSOC[0] >= 0.0:
                         model.battery_charge_level.add(
@@ -1280,9 +1296,7 @@ class System_LinProg_Model:
                 (timehorizon / (365 * 24))
                 * (
                     model.StorCosts[i, 0] * model.BuiltCapacity[i]
-                    + np.max([pyo.value(model.C[i, t]) for t in model.TimeIndex])
-                    / (self.Mult_Stor.assets[i].eff_in / 100.0)
-                    * model.StorChargeCosts[i, 0]
+                    + model.Stor_Installed_Charge[i] * model.StorChargeCosts[i, 0]
                     + model.Stor_Installed_Discharge[i] * model.StorDischargeCosts[i, 0]
                 )
                 for i in model.StorageIndex
