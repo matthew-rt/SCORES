@@ -50,7 +50,9 @@ class StorageModel:
         max_d_rate=None,
         name="Li-Ion Battery",
         capacity=1,
-        limits=[0, 1000000000],
+        storagelimits=[0, 1000000000],
+        dischargelimits=[0, 120000],
+        chargelimits=[0, 120000],
         initial_charge=1.0,
     ):
         """
@@ -244,7 +246,9 @@ class StorageModel:
         self.max_d_rate = max_d_rate
         self.capacity = capacity
         self.name = name
-        self.limits = limits
+        self.storagelimits = storagelimits
+        self.dischargelimits = dischargelimits
+        self.chargelimits = chargelimits
         self.initial_charge = initial_charge
         self.R = 0
         self.dischargelosses = 0
@@ -685,7 +689,7 @@ class BatteryStorageModel(StorageModel):
         max_c_rate=25,
         max_d_rate=25,
         capacity=1,
-        limits=[0, 1000000000],
+        storagelimits=[0, 1000000000],
     ):
         super().__init__(
             cost_params_file=None,
@@ -710,7 +714,7 @@ class BatteryStorageModel(StorageModel):
             max_d_rate=max_d_rate,
             name="Li-Ion Battery",
             capacity=capacity,
-            limits=limits,
+            storagelimits=storagelimits,
         )
 
 
@@ -744,7 +748,7 @@ class HydrogenStorageModel(StorageModel):
         capacity=1,
         initial_charge=1,
         hurdleRate=None,
-        limits=[0, 1000000000],
+        storagelimits=[0, 1000000000],
     ):
         super().__init__(
             cost_params_file=cost_params_file,
@@ -774,7 +778,7 @@ class HydrogenStorageModel(StorageModel):
             max_d_rate=max_d_rate,
             name="Hydrogen Storage",
             capacity=capacity,
-            limits=limits,
+            storagelimits=storagelimits,
             initial_charge=initial_charge,
         )
 
