@@ -549,11 +549,16 @@ class System_LinProg_Model:
         # Declare decision variables #
 
         # General
+
         model.Pfos = pyo.Var(
-            model.TimeIndex, within=pyo.NonNegativeReals
+            model.TimeIndex,
+            within=pyo.NonNegativeReals,
+            initialize={t: 0.0 for t in model.TimeIndex},
         )  # power from fossil fuels needed at time t
         model.Shed = pyo.Var(
-            model.TimeIndex, within=pyo.NonNegativeReals
+            model.TimeIndex,
+            within=pyo.NonNegativeReals,
+            initialize={t: 0.0 for t in model.TimeIndex},
         )  # amount of surplus shed
 
         # Storage
@@ -640,9 +645,12 @@ class System_LinProg_Model:
             )  # this gives the normalised power output of generator g at time t (multiplied by the built capacity to give the MW)
             for g in model.GenIndex:
                 for t in model.TimeIndex:
-                    ref[g, model.TimeIndex[t]] = self.gen_list[g].power_out[t] / max(
-                        self.gen_list[g].power_out
+                    ref[g, model.TimeIndex[t]] = (
+                        self.gen_list[g].power_out[t]
+                        / self.gen_list[g].total_installed_capacity
                     )
+            # if the generator has no power output, then set it to zero
+
             model.NormalisedGen = pyo.Param(
                 model.GenIndex,
                 model.TimeIndex,
@@ -742,6 +750,11 @@ class System_LinProg_Model:
             mutable=True,
             initialize=dict(enumerate(disp_limits_upper)),
         )
+        model.Dispatchable_Installed_Amount = pyo.Var(
+            model.DispatchableIndex,
+            within=pyo.NonNegativeReals,
+            initialize=dict(enumerate(disp_limits_lower)),
+        )
 
         # Storage Limits #
         stor_limits_lower = []
@@ -829,9 +842,11 @@ class System_LinProg_Model:
 
         # DispatchableCosts
         ref_d = {}
+
         for d in model.DispatchableIndex:
             ref_d[d, 0] = self.dispatchable_list[d].fixed_cost
             ref_d[d, 1] = self.dispatchable_list[d].variable_cost
+
         model.DispatchableCosts = pyo.Param(
             model.DispatchableIndex,
             range(2),
@@ -929,8 +944,13 @@ class System_LinProg_Model:
             for t in model.TimeIndex:
                 model.dispatchable.add(
                     model.DispatchedPower[d, t]
-                    <= model.Dispatchable_Limit_Param_Upper[d]
+                    <= model.Dispatchable_Installed_Amount[d]
                 )
+
+            model.dispatchable.add(
+                model.Dispatchable_Installed_Amount[d]
+                <= model.Dispatchable_Limit_Param_Upper[d]
+            )
 
         model.dipatchablenergy = pyo.ConstraintList()
         if self.dispatchable_energy_limits:
@@ -1187,9 +1207,7 @@ class System_LinProg_Model:
             )
             + sum(
                 (timehorizon / (365 * 24))
-                * np.max(
-                    [pyo.value(model.DispatchedPower[d, t]) for t in model.TimeIndex]
-                )
+                * model.Dispatchable_Installed_Amount[d]
                 * model.DispatchableCosts[d, 0]
                 + model.DispatchableCosts[d, 1]
                 * sum(model.DispatchedPower[d, t] for t in model.TimeIndex)
@@ -1268,14 +1286,16 @@ class System_LinProg_Model:
 
         # Create a solver #
         opt = pyo.SolverFactory(solver)
+        # opt.options["NonConvex"] = 2
         if timelimit:
             opt.options["TimeLimit"] = timelimit
         # Solve #
         print("Finding Optimal System ...")
         start = time.time()
 
-        opt.solve(self.model)
-
+        status = opt.solve(self.model)
+        print(status.solver.status)
+        print(status.solver.termination_condition)
         end = time.time()
         print("Solved after: ", int(end - start), "s")
 
