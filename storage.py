@@ -51,8 +51,8 @@ class StorageModel:
         name="Li-Ion Battery",
         capacity=1,
         storagelimits=[0, 1000000000],
-        dischargelimits=[0, 120000],
-        chargelimits=[0, 120000],
+        dischargelimits=[0, 400000],
+        chargelimits=[0, 400000],
         initial_charge=1.0,
     ):
         """
@@ -749,6 +749,8 @@ class HydrogenStorageModel(StorageModel):
         initial_charge=1,
         hurdleRate=None,
         storagelimits=[0, 1000000000],
+        dischargelimits=[0, 400000],
+        chargelimits=[0, 400000],
     ):
         super().__init__(
             cost_params_file=cost_params_file,
@@ -780,6 +782,8 @@ class HydrogenStorageModel(StorageModel):
             capacity=capacity,
             storagelimits=storagelimits,
             initial_charge=initial_charge,
+            dischargelimits=dischargelimits,
+            chargelimits=chargelimits,
         )
 
 
