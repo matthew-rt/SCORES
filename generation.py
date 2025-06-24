@@ -575,6 +575,7 @@ class NuclearModel(GenerationModel):
         lifetime=40,
         hurdlerate=0.1,
         loadfactor=0.77,
+        name="Large-scale ",
     ):
         """
         == description ==
@@ -606,6 +607,7 @@ class NuclearModel(GenerationModel):
         lifetime: (int) lifetime of the generation unit in years
         hurdlerate: (float) hurdle rate for the generation unit, between 0 and 1
         loadfactor: (float) load factor of the generation unit
+        name: (string) identifier for this nuclear object
         == returns ==
         None
         """
@@ -617,7 +619,7 @@ class NuclearModel(GenerationModel):
 
         super().__init__(
             sites,
-            "Nuclear",
+            f"{name} Nuclear",
             cost_param_entry,
             cost_params_file=cost_params_file,
             cost_sensitivity=cost_sensitivity,
@@ -993,6 +995,7 @@ class OffshoreWindModel(GenerationModel):
         force_run=False,
         limits=[0, 1000000],
         scaling_factor=1,
+        identifier="",
     ):  # this added by CQ so that a power curve can optionally be imported
         """
         == description ==
@@ -1027,13 +1030,14 @@ class OffshoreWindModel(GenerationModel):
         save: (boo) determines whether to save the results of the run
         alpha: (float) wind shear coefficient
         power_curve: (Array<float>) optional power curve - power outputs that correspond to v array spaced at 0.1m/s
+        identifier: (str) identifier, neccessary if running multiple generators of same type
         == returns ==
         None
         """
 
         super().__init__(
             sites,
-            "Offshore Wind",
+            f"{identifier}Offshore Wind",
             cost_param_entry,
             data_path=data_path,
             cost_params_file=cost_params_file,
@@ -1289,6 +1293,7 @@ class SolarModel(GenerationModel):
         month_online=None,
         limits=[0, 1000000],
         force_run=False,
+        identifier="",
     ):
         """
         == description ==
@@ -1319,7 +1324,7 @@ class SolarModel(GenerationModel):
         """
         super().__init__(
             sites,
-            "Solar",
+            f"{identifier}Solar",
             cost_param_entry,
             data_path=data_path,
             cost_params_file=cost_params_file,
@@ -1700,6 +1705,7 @@ class OnshoreWindModel(GenerationModel):
         force_run=False,
         limits=[0, 1000000],
         scaling_factor=1,
+        identifier="",
     ):
         """
         == description ==
@@ -1735,13 +1741,19 @@ class OnshoreWindModel(GenerationModel):
         data_height: (float) height at which wind speed data applies   # added by CQ
         alpha: (float) wind shear coefficient                          # added by CQ
         power_curve: (Array<float>) optional power curve - power outputs that correspond to v array spaced at 0.1m/s
+        year_online: (int) year in which the generator is operational
+        month_online: (int) month in which the generator is operational
+        force_run: (bool) determines whether to force the model to run
+        limits: (Array<float>) limits on the power output
+        scaling_factor: (float) scaling factor for the power output
+        identifier: (str) identifier for the generator, required if using more than one generator of the same type
         == returns ==
         None
         """
 
         super().__init__(
             sites,
-            "Onshore Wind",
+            f"{identifier}Onshore Wind",
             cost_param_entry,
             data_path=data_path,
             cost_params_file=cost_params_file,
