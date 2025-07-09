@@ -10,7 +10,3 @@ SCORES uses satellite data from MERRA-2 and ERA5, available on an hourly basis f
 
 
 
-## How it works
-Please provide a brief explanaiton of how the model/module works. This could include a diagram. 
-
-![diagram](model_example_figure_for_github.png)
