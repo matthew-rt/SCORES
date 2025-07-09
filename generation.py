@@ -1405,7 +1405,8 @@ class SolarModel(GenerationModel):
 
         # Need to get the site latitutudes
         site_lat = {}
-        with open(self.data_path + "site_locs.csv", "rU") as csvfile:
+
+        with open(self.data_path + "site_locs.csv", "r") as csvfile:
             reader = csv.reader(csvfile)
             next(reader)
             for row in reader:
