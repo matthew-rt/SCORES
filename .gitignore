@@ -7,4 +7,3 @@ local*
 plottingoutputs/
 credentials.py
 .DS_Store
-*.xlsx
