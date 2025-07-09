@@ -564,7 +564,7 @@ class NuclearModel(GenerationModel):
         variable_cost=2,
         data_path="",
         save_path="stored_model_runs/",
-        save=True,
+        save=False,
         year_online=None,
         month_online=None,
         capacities=[1000],
@@ -782,7 +782,7 @@ class TidalStreamTurbineModel(GenerationModel):
         turbine_size=1.47,
         data_path="",
         save_path="stored_model_runs/",
-        save=True,
+        save=False,
     ):
         """
         == description ==
@@ -981,7 +981,7 @@ class OffshoreWindModel(GenerationModel):
         hub_height=None,
         data_path="",
         save_path="stored_model_runs/",
-        save=True,
+        save=False,
         data_height=100,
         alpha=0.143,  # this row added by CQ to calculate wind shear
         power_curve=None,
@@ -1281,7 +1281,7 @@ class SolarModel(GenerationModel):
         area_factor=5.84,
         data_path="",
         save_path="stored_model_runs/",
-        save=True,
+        save=False,
         year_online=None,
         month_online=None,
         limits=[0, 1000000],
@@ -1688,7 +1688,7 @@ class OnshoreWindModel(GenerationModel):
         hub_height=None,
         data_path="",
         save_path="stored_model_runs/",
-        save=True,
+        save=False,
         data_height=100,
         alpha=0.143,
         power_curve=None,
@@ -1952,7 +1952,7 @@ class TidalStreamTurbineModel_P1(TidalStreamTurbineModel):
         months=list(range(1, 13)),
         data_path="",
         save_path="stored_model_runs/",
-        save=True,
+        save=False,
     ):
         super().__init__(
             sites=sites,
@@ -1983,7 +1983,7 @@ class TidalStreamTurbineModel_P2(TidalStreamTurbineModel):
         months=list(range(1, 13)),
         data_path="",
         save_path="stored_model_runs/",
-        save=True,
+        save=False,
     ):
         super().__init__(
             sites=sites,
@@ -2014,7 +2014,7 @@ class TidalStreamTurbineModel_P3(TidalStreamTurbineModel):
         months=list(range(1, 13)),
         data_path="",
         save_path="stored_model_runs/",
-        save=True,
+        save=False,
     ):
         super().__init__(
             sites=sites,
@@ -2044,7 +2044,7 @@ class TidalStreamTurbine_VR_1_0(TidalStreamTurbineModel):
         months=list(range(1, 13)),
         data_path="",
         save_path="stored_model_runs/",
-        save=True,
+        save=False,
     ):
         super().__init__(
             sites=sites,
@@ -2074,7 +2074,7 @@ class TidalStreamTurbine_VR_1_5(TidalStreamTurbineModel):
         months=list(range(1, 13)),
         data_path="",
         save_path="stored_model_runs/",
-        save=True,
+        save=False,
     ):
         super().__init__(
             sites=sites,
@@ -2104,7 +2104,7 @@ class TidalStreamTurbine_VR_2_0(TidalStreamTurbineModel):
         months=list(range(1, 13)),
         data_path="",
         save_path="stored_model_runs/",
-        save=True,
+        save=False,
     ):
         super().__init__(
             sites=sites,
@@ -2134,7 +2134,7 @@ class TidalStreamTurbine_VR_2_5(TidalStreamTurbineModel):
         months=list(range(1, 13)),
         data_path="",
         save_path="stored_model_runs/",
-        save=True,
+        save=False,
     ):
         super().__init__(
             sites=sites,
@@ -2164,7 +2164,7 @@ class TidalStreamTurbine_VR_3_0(TidalStreamTurbineModel):
         months=list(range(1, 13)),
         data_path="",
         save_path="stored_model_runs/",
-        save=True,
+        save=False,
     ):
         super().__init__(
             sites=sites,
@@ -2194,7 +2194,7 @@ class TidalStreamTurbine_VR_3_5(TidalStreamTurbineModel):
         months=list(range(1, 13)),
         data_path="",
         save_path="stored_model_runs/",
-        save=True,
+        save=False,
     ):
         super().__init__(
             sites=sites,
