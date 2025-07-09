@@ -2,7 +2,6 @@ log/*
 *.pyc
 *.csv
 stored_model_runs/
-params/
 scripts/*.py
 local*
 plottingoutputs/
