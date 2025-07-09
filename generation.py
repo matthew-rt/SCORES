@@ -43,7 +43,8 @@ class GenerationModel:
         == description ==
         This function initialises the class, builds empty arrays to store the
         generated power and the number of good data points for each hour, and
-        creates a dictionary which maps date to the date index.
+        creates a dictionary which maps date to the date index. All other
+        generation classes are built on top of this one.
 
         == parameters ==
         sites: (Array<int>) List of site indexes to be used
@@ -348,7 +349,7 @@ class DispatchableGenerator(GenerationModel):
     ):
         """
         == description ==
-        Initialises a DispatchableGenerator object.
+        Initialises a DispatchableGenerator object. This can be used to meet demand when storage is not sufficient
         == parameters ==
         sites: (Array<int>) List of site indexes to be used
         year_min: (int) earliest year in simulation
@@ -450,7 +451,7 @@ class Interconnector(GenerationModel):
     ):
         """
         == description ==
-        Initialises an Interconnector object.
+        Initialises an Interconnector object. This can both import and export electricity
         == parameters ==
         sites: (Array<int>) List of site indexes to be used
         year_min: (int) earliest year in simulation
@@ -474,7 +475,7 @@ class Interconnector(GenerationModel):
 
         super().__init__(
             sites,
-            f"Dispatchable_{gentype}",
+            f"Interconnector_{gentype}",
             cost_param_entry,
             cost_params_file=cost_params_file,
             cost_sensitivity=cost_sensitivity,
