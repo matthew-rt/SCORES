@@ -549,11 +549,16 @@ class System_LinProg_Model:
         # Declare decision variables #
 
         # General
+
         model.Pfos = pyo.Var(
-            model.TimeIndex, within=pyo.NonNegativeReals
+            model.TimeIndex,
+            within=pyo.NonNegativeReals,
+            initialize={t: 0.0 for t in model.TimeIndex},
         )  # power from fossil fuels needed at time t
         model.Shed = pyo.Var(
-            model.TimeIndex, within=pyo.NonNegativeReals
+            model.TimeIndex,
+            within=pyo.NonNegativeReals,
+            initialize={t: 0.0 for t in model.TimeIndex},
         )  # amount of surplus shed
 
         # Storage
@@ -640,9 +645,12 @@ class System_LinProg_Model:
             )  # this gives the normalised power output of generator g at time t (multiplied by the built capacity to give the MW)
             for g in model.GenIndex:
                 for t in model.TimeIndex:
-                    ref[g, model.TimeIndex[t]] = self.gen_list[g].power_out[t] / max(
-                        self.gen_list[g].power_out
+                    ref[g, model.TimeIndex[t]] = (
+                        self.gen_list[g].power_out[t]
+                        / self.gen_list[g].total_installed_capacity
                     )
+            # if the generator has no power output, then set it to zero
+
             model.NormalisedGen = pyo.Param(
                 model.GenIndex,
                 model.TimeIndex,
@@ -742,13 +750,35 @@ class System_LinProg_Model:
             mutable=True,
             initialize=dict(enumerate(disp_limits_upper)),
         )
+        model.Dispatchable_Installed_Amount = pyo.Var(
+            model.DispatchableIndex,
+            within=pyo.NonNegativeReals,
+            initialize=dict(enumerate(disp_limits_lower)),
+        )
 
         # Storage Limits #
         stor_limits_lower = []
         stor_limits_upper = []
         for i in model.StorageIndex:
-            stor_limits_lower.append(self.Mult_Stor.assets[i].limits[0])
-            stor_limits_upper.append(self.Mult_Stor.assets[i].limits[1])
+            stor_limits_lower.append(self.Mult_Stor.assets[i].storagelimits[0])
+            stor_limits_upper.append(self.Mult_Stor.assets[i].storagelimits[1])
+
+        stor_discharge_limits_lower = []
+        stor_discharge_limits_upper = []
+        for i in model.StorageIndex:
+            stor_discharge_limits_lower.append(
+                self.Mult_Stor.assets[i].dischargelimits[0]
+            )
+            stor_discharge_limits_upper.append(
+                self.Mult_Stor.assets[i].dischargelimits[1]
+            )
+
+        stor_charge_limits_lower = []
+        stor_charge_limits_upper = []
+        for i in model.StorageIndex:
+            stor_charge_limits_lower.append(self.Mult_Stor.assets[i].chargelimits[0])
+            stor_charge_limits_upper.append(self.Mult_Stor.assets[i].chargelimits[1])
+
         model.Stor_Limit_Param_Lower = pyo.Param(
             model.StorageIndex,
             within=pyo.NonNegativeReals,
@@ -762,6 +792,42 @@ class System_LinProg_Model:
             initialize=dict(enumerate(stor_limits_upper)),
         )
 
+        model.Stor_Discharge_Limit_Param_Lower = pyo.Param(
+            model.StorageIndex,
+            within=pyo.NonNegativeReals,
+            mutable=False,
+            initialize=dict(enumerate(stor_discharge_limits_lower)),
+        )
+        model.Stor_Discharge_Limit_Param_Upper = pyo.Param(
+            model.StorageIndex,
+            within=pyo.NonNegativeReals,
+            mutable=False,
+            initialize=dict(enumerate(stor_discharge_limits_upper)),
+        )
+        model.Stor_Charge_Limit_Param_Lower = pyo.Param(
+            model.StorageIndex,
+            within=pyo.NonNegativeReals,
+            mutable=False,
+            initialize=dict(enumerate(stor_charge_limits_lower)),
+        )
+
+        model.Stor_Charge_Limit_Param_Upper = pyo.Param(
+            model.StorageIndex,
+            within=pyo.NonNegativeReals,
+            mutable=False,
+            initialize=dict(enumerate(stor_charge_limits_upper)),
+        )
+
+        model.Stor_Installed_Discharge = pyo.Var(
+            model.StorageIndex,
+            within=pyo.NonNegativeReals,
+            initialize=dict(enumerate(stor_discharge_limits_lower)),
+        )
+        model.Stor_Installed_Charge = pyo.Var(
+            model.StorageIndex,
+            within=pyo.NonNegativeReals,
+            initialize=dict(enumerate(stor_charge_limits_lower)),
+        )
         # Charger Type Limits #
         V2G_limits_lower = []
         V2G_limits_upper = []
@@ -829,9 +895,11 @@ class System_LinProg_Model:
 
         # DispatchableCosts
         ref_d = {}
+
         for d in model.DispatchableIndex:
             ref_d[d, 0] = self.dispatchable_list[d].fixed_cost
             ref_d[d, 1] = self.dispatchable_list[d].variable_cost
+
         model.DispatchableCosts = pyo.Param(
             model.DispatchableIndex,
             range(2),
@@ -929,8 +997,13 @@ class System_LinProg_Model:
             for t in model.TimeIndex:
                 model.dispatchable.add(
                     model.DispatchedPower[d, t]
-                    <= model.Dispatchable_Limit_Param_Upper[d]
+                    <= model.Dispatchable_Installed_Amount[d]
                 )
+
+            model.dispatchable.add(
+                model.Dispatchable_Installed_Amount[d]
+                <= model.Dispatchable_Limit_Param_Upper[d]
+            )
 
         model.dipatchablenergy = pyo.ConstraintList()
         if self.dispatchable_energy_limits:
@@ -946,6 +1019,10 @@ class System_LinProg_Model:
         model.maxD = pyo.ConstraintList()
         model.maxC = pyo.ConstraintList()
         model.storagelimits = pyo.ConstraintList()
+        model.installed_discharge_limits = pyo.ConstraintList()
+        model.hourly_discharge_limits = pyo.ConstraintList()
+        model.installed_charge_limits = pyo.ConstraintList()
+        model.hourly_charge_limits = pyo.ConstraintList()
         for i in range(self.Mult_Stor.n_assets):
             model.storagelimits.add(
                 model.BuiltCapacity[i] >= model.Stor_Limit_Param_Lower[i]
@@ -953,7 +1030,20 @@ class System_LinProg_Model:
             model.storagelimits.add(
                 model.BuiltCapacity[i] <= model.Stor_Limit_Param_Upper[i]
             )
-
+            model.installed_discharge_limits.add(
+                model.Stor_Installed_Discharge[i]
+                >= model.Stor_Discharge_Limit_Param_Lower[i]
+            )
+            model.installed_discharge_limits.add(
+                model.Stor_Installed_Discharge[i]
+                <= model.Stor_Discharge_Limit_Param_Upper[i]
+            )
+            model.installed_charge_limits.add(
+                model.Stor_Installed_Charge[i] <= model.Stor_Charge_Limit_Param_Upper[i]
+            )
+            model.installed_charge_limits.add(
+                model.Stor_Installed_Charge[i] >= model.Stor_Charge_Limit_Param_Lower[i]
+            )
             for t in range(timehorizon):
                 model.maxSOC.add(
                     model.SOC[i, t] <= model.BuiltCapacity[i]
@@ -969,6 +1059,15 @@ class System_LinProg_Model:
                     <= model.BuiltCapacity[i]
                     * self.Mult_Stor.assets[i].max_c_rate
                     / 100
+                )
+
+                model.hourly_discharge_limits.add(
+                    model.D[i, t] * self.Mult_Stor.assets[i].eff_out / 100.0
+                    <= model.Stor_Installed_Discharge[i]
+                )
+                model.hourly_charge_limits.add(
+                    model.C[i, t] * 100.0 / self.Mult_Stor.assets[i].eff_in
+                    <= model.Stor_Installed_Charge[i]
                 )
 
                 if t == 0:
@@ -1187,9 +1286,7 @@ class System_LinProg_Model:
             )
             + sum(
                 (timehorizon / (365 * 24))
-                * np.max(
-                    [pyo.value(model.DispatchedPower[d, t]) for t in model.TimeIndex]
-                )
+                * model.Dispatchable_Installed_Amount[d]
                 * model.DispatchableCosts[d, 0]
                 + model.DispatchableCosts[d, 1]
                 * sum(model.DispatchedPower[d, t] for t in model.TimeIndex)
@@ -1199,12 +1296,8 @@ class System_LinProg_Model:
                 (timehorizon / (365 * 24))
                 * (
                     model.StorCosts[i, 0] * model.BuiltCapacity[i]
-                    + np.max([pyo.value(model.C[i, t]) for t in model.TimeIndex])
-                    / (self.Mult_Stor.assets[i].eff_in / 100.0)
-                    * model.StorChargeCosts[i, 0]
-                    + np.max([pyo.value(model.D[i, t]) for t in model.TimeIndex])
-                    * (self.Mult_Stor.assets[i].eff_out / 100.0)
-                    * model.StorDischargeCosts[i, 0]
+                    + model.Stor_Installed_Charge[i] * model.StorChargeCosts[i, 0]
+                    + model.Stor_Installed_Discharge[i] * model.StorDischargeCosts[i, 0]
                 )
                 for i in model.StorageIndex
             )
@@ -1268,14 +1361,16 @@ class System_LinProg_Model:
 
         # Create a solver #
         opt = pyo.SolverFactory(solver)
+        # opt.options["NonConvex"] = 2
         if timelimit:
             opt.options["TimeLimit"] = timelimit
         # Solve #
         print("Finding Optimal System ...")
         start = time.time()
 
-        opt.solve(self.model)
-
+        status = opt.solve(self.model)
+        print(status.solver.status)
+        print(status.solver.termination_condition)
         end = time.time()
         print("Solved after: ", int(end - start), "s")
 
