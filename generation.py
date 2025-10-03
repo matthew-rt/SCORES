@@ -345,6 +345,7 @@ class DispatchableGenerator(GenerationModel):
         month_online=None,
         capacities=[1000],
         limits=[0, 1000000],
+        ramprate=0.25,
     ):
         """
         == description ==
@@ -370,6 +371,7 @@ class DispatchableGenerator(GenerationModel):
         month_online: list(int) month the generation unit was installed, at each site
         capacities: (Array <float>) installed capacity of each site in MW
         limits: (Array<float>) used to define the max and min installed generation in MW ([min,max])
+        ramprate: (float) ramp rate of the generation unit in % of full capacity per hour (0-1)
         == returns ==
         None
         """
@@ -400,6 +402,7 @@ class DispatchableGenerator(GenerationModel):
         self.max_possible_output = self.total_installed_capacity * len(
             self.power_out_array
         )
+        self.ramp_rate = ramprate
 
     def __str__(self):
         return f"{self.plant_type} Generator, total capacity: {self.total_installed_capacity} MW"
@@ -572,6 +575,7 @@ class NuclearModel(GenerationModel):
         lifetime=40,
         hurdlerate=0.1,
         loadfactor=0.77,
+        name="Large-scale ",
     ):
         """
         == description ==
@@ -603,6 +607,7 @@ class NuclearModel(GenerationModel):
         lifetime: (int) lifetime of the generation unit in years
         hurdlerate: (float) hurdle rate for the generation unit, between 0 and 1
         loadfactor: (float) load factor of the generation unit
+        name: (string) identifier for this nuclear object
         == returns ==
         None
         """
@@ -614,7 +619,7 @@ class NuclearModel(GenerationModel):
 
         super().__init__(
             sites,
-            "Nuclear",
+            f"{name} Nuclear",
             cost_param_entry,
             cost_params_file=cost_params_file,
             cost_sensitivity=cost_sensitivity,
@@ -656,6 +661,7 @@ class NuclearModel(GenerationModel):
                 self.plant_capacities[sitenum] * self.loadfactor
             )
         self.scale_output(self.total_installed_capacity)
+        self.power_out_array = np.array(self.power_out)
 
 
 class GeothermalModel(GenerationModel):
@@ -989,7 +995,9 @@ class OffshoreWindModel(GenerationModel):
         month_online=None,
         force_run=False,
         limits=[0, 1000000],
-        scaling_factor=1,
+        identifier="",
+        era_mean_wind_speed=None,
+        gwa_mean_wind_speed=None,
     ):  # this added by CQ so that a power curve can optionally be imported
         """
         == description ==
@@ -1024,13 +1032,22 @@ class OffshoreWindModel(GenerationModel):
         save: (boo) determines whether to save the results of the run
         alpha: (float) wind shear coefficient
         power_curve: (Array<float>) optional power curve - power outputs that correspond to v array spaced at 0.1m/s
+        year_online: list(int) year the generation unit was installed, at each site
+        month_online: list(int) month the generation unit was installed, at each site
+        force_run: (bool) if True, forces the model to run even if a saved
+        run is found
+        limits: (Array<float>) used to define the max and min installed generation in MW ([
+        min,max])
+        identifier: (str) identifier, neccessary if running multiple generators of same type
+        era_mean_wind_speed: (Array<float>) mean wind speed from ERA5 data for each site
+        gwa_mean_wind_speed: (Array<float>) mean wind speed from GWA data for each site
         == returns ==
         None
         """
 
         super().__init__(
             sites,
-            "Offshore Wind",
+            f"{identifier}Offshore Wind",
             cost_param_entry,
             data_path=data_path,
             cost_params_file=cost_params_file,
@@ -1077,7 +1094,8 @@ class OffshoreWindModel(GenerationModel):
         self.n_turbine = n_turbine
         self.turbine_size = turbine_size
         self.hub_height = hub_height if hub_height != None else loadedhub_height
-
+        self.era_mean_wind_speed = era_mean_wind_speed
+        self.gwa_mean_wind_speed = gwa_mean_wind_speed
         self.data_height = data_height  # added by CQ
         self.alpha = alpha  # added by CQ
         self.power_curve = power_curve
@@ -1222,6 +1240,13 @@ class OffshoreWindModel(GenerationModel):
             # approach of calculating each point individually
             site_speeds = np.array(site_speeds)
             site_speeds = site_speeds.astype(float)
+            if self.era_mean_wind_speed is not None:
+                # scale the wind speeds to the ERA5 mean wind speed
+                site_speeds = (
+                    self.gwa_mean_wind_speed[si]
+                    * site_speeds
+                    / self.era_mean_wind_speed[si]
+                )
             site_speeds[site_speeds < 0] = 0
 
             # adjusts the wind speeds to hub height
@@ -1286,6 +1311,7 @@ class SolarModel(GenerationModel):
         month_online=None,
         limits=[0, 1000000],
         force_run=False,
+        identifier="",
     ):
         """
         == description ==
@@ -1316,7 +1342,7 @@ class SolarModel(GenerationModel):
         """
         super().__init__(
             sites,
-            "Solar",
+            f"{identifier}Solar",
             cost_param_entry,
             data_path=data_path,
             cost_params_file=cost_params_file,
@@ -1696,7 +1722,9 @@ class OnshoreWindModel(GenerationModel):
         month_online=None,
         force_run=False,
         limits=[0, 1000000],
-        scaling_factor=1,
+        identifier="",
+        era_mean_wind_speed=None,
+        gwa_mean_wind_speed=None,
     ):
         """
         == description ==
@@ -1732,13 +1760,20 @@ class OnshoreWindModel(GenerationModel):
         data_height: (float) height at which wind speed data applies   # added by CQ
         alpha: (float) wind shear coefficient                          # added by CQ
         power_curve: (Array<float>) optional power curve - power outputs that correspond to v array spaced at 0.1m/s
+        year_online: (int) year in which the generator is operational
+        month_online: (int) month in which the generator is operational
+        force_run: (bool) determines whether to force the model to run
+        limits: (Array<float>) limits on the power output
+        identifier: (str) identifier for the generator, required if using more than one generator of the same type
+        era_mean_wind_speed: (Array<float>) mean wind speed from ERA5 data for each site
+        gwa_mean_wind_speed: (Array<float>) mean wind speed from GWA data for each site
         == returns ==
         None
         """
 
         super().__init__(
             sites,
-            "Onshore Wind",
+            f"{identifier}Onshore Wind",
             cost_param_entry,
             data_path=data_path,
             cost_params_file=cost_params_file,
@@ -1785,11 +1820,11 @@ class OnshoreWindModel(GenerationModel):
         self.n_turbine = n_turbine
         self.turbine_size = turbine_size
         self.hub_height = hub_height if hub_height != None else loadedhub_height
-
+        self.era_mean_wind_speed = era_mean_wind_speed
+        self.gwa_mean_wind_speed = gwa_mean_wind_speed
         self.data_height = data_height  # added by CQ
         self.alpha = alpha  # added by CQ
         self.power_curve = power_curve
-        self.scaling_factor = scaling_factor
 
         file_name = get_filename(
             sites, "w" + str(turbine_size), year_min, year_max, months
@@ -1912,7 +1947,13 @@ class OnshoreWindModel(GenerationModel):
             site_speeds = site_speeds.astype(float)
             site_speeds[site_speeds < 0] = 0
             # adjusts the wind speeds to hub height
-            site_speeds = site_speeds * self.scaling_factor
+            if self.era_mean_wind_speed is not None:
+                # scale the wind speeds to the ERA5 mean wind speed
+                site_speeds = (
+                    self.gwa_mean_wind_speed[si]
+                    * site_speeds
+                    / self.era_mean_wind_speed[si]
+                )
             site_speeds = site_speeds * np.power(
                 self.hub_height / self.data_height, self.alpha
             )

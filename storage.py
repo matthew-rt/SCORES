@@ -50,7 +50,9 @@ class StorageModel:
         max_d_rate=None,
         name="Li-Ion Battery",
         capacity=1,
-        limits=[0, 1000000000],
+        storagelimits=[0, 1000000000],
+        dischargelimits=[0, 400000],
+        chargelimits=[0, 400000],
         initial_charge=1.0,
     ):
         """
@@ -233,9 +235,7 @@ class StorageModel:
         )
         self.discharge_fixed_cost = dischargefixedcost
         self.discharge_variable_cost = dischargeVarOpex
-        print(f"Storage fixed cost: {storagefixedcost}")
-        print(f"Charge fixed cost: {chargefixedcost*max_c_rate/100}")
-        print(f"Discharge fixed cost: {dischargefixedcost*max_d_rate/100}")
+
         self.variable_cost = sum([storageVarOpex, chargeVarOpex, dischargeVarOpex])
         self.fixed_cost = (
             storagefixedcost
@@ -246,7 +246,9 @@ class StorageModel:
         self.max_d_rate = max_d_rate
         self.capacity = capacity
         self.name = name
-        self.limits = limits
+        self.storagelimits = storagelimits
+        self.dischargelimits = dischargelimits
+        self.chargelimits = chargelimits
         self.initial_charge = initial_charge
         self.R = 0
         self.dischargelosses = 0
@@ -687,6 +689,7 @@ class BatteryStorageModel(StorageModel):
         max_c_rate=25,
         max_d_rate=25,
         capacity=1,
+        storagelimits=[0, 1000000000],
     ):
         super().__init__(
             cost_params_file=None,
@@ -711,7 +714,7 @@ class BatteryStorageModel(StorageModel):
             max_d_rate=max_d_rate,
             name="Li-Ion Battery",
             capacity=capacity,
-            limits=[0, 1000000000],
+            storagelimits=storagelimits,
         )
 
 
@@ -745,7 +748,9 @@ class HydrogenStorageModel(StorageModel):
         capacity=1,
         initial_charge=1,
         hurdleRate=None,
-        limits=[0, 1000000000],
+        storagelimits=[0, 1000000000],
+        dischargelimits=[0, 400000],
+        chargelimits=[0, 400000],
     ):
         super().__init__(
             cost_params_file=cost_params_file,
@@ -775,8 +780,10 @@ class HydrogenStorageModel(StorageModel):
             max_d_rate=max_d_rate,
             name="Hydrogen Storage",
             capacity=capacity,
-            limits=limits,
+            storagelimits=storagelimits,
             initial_charge=initial_charge,
+            dischargelimits=dischargelimits,
+            chargelimits=chargelimits,
         )
 
 
