@@ -1972,13 +1972,13 @@ class OnshoreWindModel(GenerationModel):
                     * site_speeds
                     / self.era_mean_wind_speed[si]
                 )
-
+            site_speeds = site_speeds * np.power(
+                self.hub_height / self.data_height, self.alpha
+            )
             if self.density_correction==False:
 
                 # adjusts the wind speeds to hub height
-                site_speeds = site_speeds * np.power(
-                    self.hub_height / self.data_height, self.alpha
-                )
+
                 site_speeds[site_speeds > v[-1]] = v[-1]  # prevents overload
                 p1s = np.floor(site_speeds / 0.1).astype(
                     int
@@ -2002,7 +2002,7 @@ class OnshoreWindModel(GenerationModel):
                 firstdatadatehours = (
                     self.startdatetime - firstdatadatetime
                 ).total_seconds() / 3600
-                self.loadindex = int(firstdatadatehours)
+                tploadindex = int(firstdatadatehours)
                 pressuresite= self.pressuresites[si]
                 temperaturesite = self.temperaturesites[si]
                 pressure = np.loadtxt(
@@ -2011,12 +2011,13 @@ class OnshoreWindModel(GenerationModel):
                 temperature = np.loadtxt(
                     f"{self.temperaturefile}{str(temperaturesite)}.csv", delimiter=",", skiprows=1, usecols=(2)
                 )
-
+                print(pressure.shape)
                 pressure = pressure[
-                    rangeselectorindex : self.loadindex + len(self.n_good_points)
+                    tploadindex : self.loadindex + len(self.n_good_points)
                 ]
+                print("Pressure range selector index:", tploadindex)
                 temperature = temperature[
-                    rangeselectorindex : self.loadindex + len(self.n_good_points)
+                    tploadindex : self.loadindex + len(self.n_good_points)
                 ]
                 supplementalpowercurves=np.loadtxt(self.supplemental_curves,delimiter=",")
                 densities=supplementalpowercurves[0][1:]
@@ -2026,24 +2027,27 @@ class OnshoreWindModel(GenerationModel):
 
 
                 pressure = pressure.astype(float)
+                print(pressure.shape)
                 temperature = temperature.astype(float)
+                print(temperature.shape)
                 siteelevation = self.siteelevations[si]
-                sitedensity= (pressure*np.exp((-9.80665*(siteelevation+self.hub_height))/(287.05*(temperature))))/(287.05*(temperature))
-                print(f"Site average density:{np.mean(sitedensity)} kg/m3")
-                maxsitedensity = np.max(sitedensity)
-                minsitedensity = np.min(sitedensity)
-                if maxsitedensity > maxdensity:
+                sitedensities= (pressure*np.exp((-9.80665*(siteelevation+self.hub_height))/(287.05*(temperature))))/(287.05*(temperature))
+                print(f"Site average density:{np.mean(sitedensities)} kg/m3")
+                maxsitedensities = np.max(sitedensities)
+                minsitedensities = np.min(sitedensities)
+                print(f"Site max density:{maxsitedensities} kg/m3")
+                print(f"Site min density:{minsitedensities} kg/m3")
+                if maxsitedensities > maxdensity:
                     raise Exception(
-                        f"Site density {maxsitedensity} kg/m3 exceeds maximum density in power curve {maxdensity} kg/m3"
+                        f"Site density {maxsitedensities} kg/m3 exceeds maximum density in power curve {maxdensity} kg/m3"
                     )
-                if minsitedensity < mindensity:
+                if minsitedensities < mindensity:
                     raise Exception(
-                        f"Site density {minsitedensity} kg/m3 is below minimum density in power curve {mindensity} kg/m3"
+                        f"Site density {minsitedensities} kg/m3 is below minimum density in power curve {mindensity} kg/m3"
                     )
                 sitedensities=np.round(sitedensities*40,0)/40
                 for index, density in enumerate(densities):
                     thisdensitypowercurve=supplementalpowercurves[1:,index+1]
-                    thisdensitypowercurve = thisdensitypowercurve*self.turbine_size
                     selectedhours=np.where(sitedensities==density)[0]
                     selectedspeeds=site_speeds[selectedhours]
                     #for each speed, find the closest speed in the power curve
