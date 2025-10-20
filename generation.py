@@ -2024,6 +2024,7 @@ class OnshoreWindModel(GenerationModel):
                 mindensity= np.min(densities)
                 maxdensity= np.max(densities)
                 windspeeds=supplementalpowercurves[1:,0]
+                
 
 
                 pressure = pressure.astype(float)
@@ -2046,8 +2047,11 @@ class OnshoreWindModel(GenerationModel):
                         f"Site density {minsitedensities} kg/m3 is below minimum density in power curve {mindensity} kg/m3"
                     )
                 sitedensities=np.round(sitedensities*40,0)/40
+                densities = np.round(densities*40,0)/40
                 for index, density in enumerate(densities):
                     thisdensitypowercurve=supplementalpowercurves[1:,index+1]
+                    thisdensitypowercurve = np.array(thisdensitypowercurve)
+                    # thisdensitypowercurve*= self.turbine_size  # scale the power curve to the turbine size
                     selectedhours=np.where(sitedensities==density)[0]
                     selectedspeeds=site_speeds[selectedhours]
                     #for each speed, find the closest speed in the power curve
@@ -2057,7 +2061,6 @@ class OnshoreWindModel(GenerationModel):
                     #look up the indeces in the selected power curve
                     thesepoweroutvals = thisdensitypowercurve[powercurveindeces] * self.n_turbine[si]
                     poweroutvals[selectedhours] = thesepoweroutvals
-                
                 # adjusts the wind speeds to hub height
 
  
