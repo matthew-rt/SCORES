@@ -12,8 +12,7 @@ from system import ElectricitySystem
 import seaborn as sns
 
 sns.set_theme()
-
-basedemand = np.loadtxt("demand.csv", usecols=2, delimiter=",", skiprows=1)
+basedemand = np.loadtxt("w:/SCORES-DATA/demand.csv", usecols=2, delimiter=",", skiprows=1)
 
 
 totaldemand = 352
@@ -61,7 +60,7 @@ for year in range(numberofyears):
 
 print(np.max(basedemand))
 
-existingdata = pd.read_excel("/Users/matt/SCORESdata/repd-q3-oct-2024-trimmed.xlsx")
+existingdata = pd.read_excel("w:/SCORES-DATA/repd-q3-oct-2024-trimmed.xlsx")
 existingonshore = existingdata[existingdata["Technology Type"] == "Wind Onshore"].copy()
 existingonshore = existingonshore[
     existingonshore["Development Status (short)"] == "Operational"
@@ -71,13 +70,13 @@ transformer = proj.Transformer.from_crs("EPSG:27700", "EPSG:4326", always_xy=Tru
 existingonshore["Longitude"], existingonshore["Latitude"] = transformer.transform(
     existingonshore["X-coordinate"].values, existingonshore["Y-coordinate"].values
 )
-offshoredata = pd.read_excel("/Users/matt/SCORESdata/offshorewindpipeline.xlsx")
+offshoredata = pd.read_excel("w:/SCORES-DATA/offshorewindpipeline.xlsx")
 
 offshoredata["Longitude"], offshoredata["Latitude"] = transformer.transform(
     offshoredata["X-coordinate"].values, offshoredata["Y-coordinate"].values
 )
 
-winddatafolder = "/Users/matt/SCORESdata/era5/"
+winddatafolder = "w:/SCORES-DATA/era5wind/"
 windsitelocs = np.loadtxt(winddatafolder + "site_locs.csv", skiprows=1, delimiter=",")
 
 (
@@ -116,14 +115,14 @@ for i, site in enumerate(existingonshoresites):
 existingonshorenumberofturbines = onshoresitecapacities / 4
 existingonshorenumberofturbines = [int(i) for i in existingonshorenumberofturbines]
 
-powercurvelocation = "/Users/matt/SCORESdata/DNV power curves/CSV/"
+powercurvelocation = "w:/SCORES-DATA/DNV power curves/CSV/"
 if powercurvechoice == "Gross":
     existingonshorepowercurve = np.loadtxt(
         powercurvelocation + "4_MW.csv", delimiter=",", skiprows=1
     )
 else:
     existingonshorepowercurve = 4 * np.loadtxt(
-        "/Users/matt/SCORESdata/genericonshorepowercurve.csv",
+        "w:/SCORES-DATA/genericonshorepowercurve.csv",
         delimiter=",",
         skiprows=1,
     )
@@ -132,398 +131,383 @@ else:
 gaspercent = []
 additionaldemandlist = []
 offshorewindreduction = []
-for reduction in range(40):
-    print("\n\n ---------")
-    offshorewindreduction.append(reduction / 4)
-    totalinstalledcapacity = np.sum(onshoresitecapacities)
-    existingonshoregenerator = generation.OnshoreWindModel(
-        sites=existingonshoresites,
-        turbine_size=4,
-        year_min=yearmin,
-        year_max=yearmax,
-        data_path=winddatafolder,
-        n_turbine=existingonshorenumberofturbines,
-        force_run=True,
-        power_curve=existingonshorepowercurve,
-    )
-    onshorecapacity = 30
-    futureonshoreinstall = onshorecapacity * 10**3 - totalinstalledcapacity
 
-    scalesize = futureonshoreinstall / totalinstalledcapacity
-    scaledcapacities = onshoresitecapacities * scalesize
-    scalednumberofturbines = scaledcapacities / 7
-    scalednumberofturbines = [int(i) for i in scalednumberofturbines]
+totalinstalledcapacity = np.sum(onshoresitecapacities)
+existingonshoregenerator = generation.OnshoreWindModel(
+    sites=existingonshoresites,
+    turbine_size=4,
+    year_min=yearmin,
+    year_max=yearmax,
+    data_path=winddatafolder,
+    n_turbine=existingonshorenumberofturbines,
+    force_run=True,
+    power_curve=existingonshorepowercurve,
+)
+onshorecapacity = 30
+futureonshoreinstall = onshorecapacity * 10**3 - totalinstalledcapacity
+
+scalesize = futureonshoreinstall / totalinstalledcapacity
+scaledcapacities = onshoresitecapacities * scalesize
+scalednumberofturbines = scaledcapacities / 7
+scalednumberofturbines = [int(i) for i in scalednumberofturbines]
+
+if powercurvechoice == "Gross":
+    futureonshorepowercurve = np.loadtxt(
+        powercurvelocation + "7_MW.csv", delimiter=",", skiprows=1
+    )
+else:
+    futureonshorepowercurve = 7 * np.loadtxt(
+        "w:/SCORES-DATA/genericonshorepowercurve.csv",
+        delimiter=",",
+        skiprows=1,
+    )
+
+futureonshoregenerator = generation.OnshoreWindModel(
+    turbine_size=7,
+    sites=existingonshoresites,
+    year_min=yearmin,
+    year_max=yearmax,
+    data_path=winddatafolder,
+    n_turbine=scalednumberofturbines,
+    force_run=True,
+    power_curve=futureonshorepowercurve,
+    v_cut_out=25,
+)
+
+existingoffshoresizes = existingoffshore["Comb turbine size"].unique().tolist()
+existingoffshoregenerators = []
+for turbsize in existingoffshoresizes:
+    thisturbinsizedata = existingoffshore[
+        existingoffshore["Comb turbine size"] == turbsize
+    ]
+    sites = thisturbinsizedata["site"].unique().tolist()
+    sites = [int(i) for i in sites]
+    capacities = np.zeros(len(sites))
+    for i, site in enumerate(sites):
+        capacities[i] = np.sum(
+            thisturbinsizedata[thisturbinsizedata["site"] == site][
+                "Installed Capacity (MWelec)"
+            ]
+        )
+    numberofturbines = capacities / turbsize
+    numberofturbines = [int(i) for i in numberofturbines]
 
     if powercurvechoice == "Gross":
-        futureonshorepowercurve = np.loadtxt(
-            powercurvelocation + "7_MW.csv", delimiter=",", skiprows=1
-        )
-    else:
-        futureonshorepowercurve = 7 * np.loadtxt(
-            "/Users/matt/SCORESdata/genericonshorepowercurve.csv",
+        powercurve = np.loadtxt(
+            powercurvelocation + f"{int(turbsize)}_MW.csv",
             delimiter=",",
             skiprows=1,
         )
+    elif powercurvechoice == "Net":
+        powercurve = np.loadtxt(
+            "w:/SCORES-DATA/genericoffshorepowercurve.csv",
+            delimiter=",",
+            skiprows=1,)
+        powercurve[:, 1] *= turbsize
 
-    futureonshoregenerator = generation.OnshoreWindModel(
-        turbine_size=7,
-        sites=existingonshoresites,
+    thissizegenerator = generation.OffshoreWindModel(
+        turbine_size=turbsize,
+        sites=sites,
         year_min=yearmin,
         year_max=yearmax,
         data_path=winddatafolder,
-        n_turbine=scalednumberofturbines,
+        n_turbine=numberofturbines,
         force_run=True,
-        power_curve=futureonshorepowercurve,
-        v_cut_out=25,
+        power_curve=powercurve,
     )
+    existingoffshoregenerators.append(thissizegenerator)
 
-    existingoffshoresizes = existingoffshore["Comb turbine size"].unique().tolist()
-    existingoffshoregenerators = []
-    for turbsize in existingoffshoresizes:
-        thisturbinsizedata = existingoffshore[
-            existingoffshore["Comb turbine size"] == turbsize
-        ]
-        sites = thisturbinsizedata["site"].unique().tolist()
-        sites = [int(i) for i in sites]
-        capacities = np.zeros(len(sites))
-        for i, site in enumerate(sites):
-            capacities[i] = np.sum(
-                thisturbinsizedata[thisturbinsizedata["site"] == site][
-                    "Installed Capacity (MWelec)"
-                ]
-            )
-        numberofturbines = capacities / turbsize
-        numberofturbines = [int(i) for i in numberofturbines]
+futureoffshore = offshoredata[
+    offshoredata["Estimated operational year"] != "Operational"
+].copy()
 
-        if powercurvechoice == "Gross":
-            powercurve = np.loadtxt(
-                powercurvelocation + f"{int(turbsize)}_MW.csv",
-                delimiter=",",
-                skiprows=1,
-            )
-        elif powercurvechoice == "Net":
-            powercurve = turbsize * np.loadtxt(
-                "/Users/matt/SCORESdata/genericoffshorepowercurve.csv",
-                delimiter=",",
-                skiprows=1,
-            )
-        elif powercurvechoice == "WorseNet":
-            powercurve = turbsize * np.loadtxt(
-                "/Users/matt/SCORESdata/worsegenericoffshorepowercurve.csv",
-                delimiter=",",
-                skiprows=1,
-            )
+existingoffshorecapacity = np.sum(
+    [i.total_installed_capacity for i in existingoffshoregenerators]
+)
 
-        thissizegenerator = generation.OffshoreWindModel(
-            turbine_size=turbsize,
-            sites=sites,
-            year_min=yearmin,
-            year_max=yearmax,
-            data_path=winddatafolder,
-            n_turbine=numberofturbines,
-            force_run=True,
-            power_curve=powercurve,
+futurecapacity = np.sum(futureoffshore["Installed Capacity (MWelec)"])
+offshorecapacity = 50
+requiredfuturecapacity = offshorecapacity * 10**3 - existingoffshorecapacity
+scalesize = requiredfuturecapacity / futurecapacity
+
+futureoffshoresizes = futureoffshore["Comb turbine size"].unique().tolist()
+futureoffshoregenerators = []
+
+for turbsize in futureoffshoresizes:
+    thisturbinsizedata = futureoffshore[
+        futureoffshore["Comb turbine size"] == turbsize
+    ]
+    sites = thisturbinsizedata["site"].unique().tolist()
+    sites = [int(i) for i in sites]
+
+    capacities = np.zeros(len(sites))
+    for i, site in enumerate(sites):
+        capacities[i] = np.sum(
+            thisturbinsizedata[thisturbinsizedata["site"] == site][
+                "Installed Capacity (MWelec)"
+            ]
         )
-        existingoffshoregenerators.append(thissizegenerator)
+    capacities *= scalesize
+    numberofturbines = capacities / turbsize
+    numberofturbines = [int(i) for i in numberofturbines]
 
-    futureoffshore = offshoredata[
-        offshoredata["Estimated operational year"] != "Operational"
-    ].copy()
-
-    existingoffshorecapacity = np.sum(
-        [i.total_installed_capacity for i in existingoffshoregenerators]
-    )
-
-    futurecapacity = np.sum(futureoffshore["Installed Capacity (MWelec)"])
-    offshorecapacity = 50 - reduction / 4
-    print(f"Offshore capacity:{offshorecapacity}")
-    requiredfuturecapacity = offshorecapacity * 10**3 - existingoffshorecapacity
-    scalesize = requiredfuturecapacity / futurecapacity
-    print(requiredfuturecapacity)
-    print(scalesize)
-    futureoffshoresizes = futureoffshore["Comb turbine size"].unique().tolist()
-    futureoffshoregenerators = []
-
-    for turbsize in futureoffshoresizes:
-        thisturbinsizedata = futureoffshore[
-            futureoffshore["Comb turbine size"] == turbsize
-        ]
-        sites = thisturbinsizedata["site"].unique().tolist()
-        sites = [int(i) for i in sites]
-
-        capacities = np.zeros(len(sites))
-        for i, site in enumerate(sites):
-            capacities[i] = np.sum(
-                thisturbinsizedata[thisturbinsizedata["site"] == site][
-                    "Installed Capacity (MWelec)"
-                ]
-            )
-        capacities *= scalesize
-        numberofturbines = capacities / turbsize
-        numberofturbines = [int(i) for i in numberofturbines]
-
-        if powercurvechoice == "Gross":
-            powercurve = np.loadtxt(
-                powercurvelocation + f"{int(turbsize)}_MW.csv",
-                delimiter=",",
-                skiprows=1,
-            )
-        elif powercurvechoice == "Net":
-            powercurve = turbsize * np.loadtxt(
-                "/Users/matt/SCORESdata/genericoffshorepowercurve.csv",
-                delimiter=",",
-                skiprows=1,
-            )
-        elif powercurvechoice == "WorseNet":
-            powercurve = turbsize * np.loadtxt(
-                "/Users/matt/SCORESdata/worsegenericoffshorepowercurve.csv",
-                delimiter=",",
-                skiprows=1,
-            )
-
-        thissizegenerator = generation.OffshoreWindModel(
-            turbine_size=turbsize,
-            sites=sites,
-            year_min=yearmin,
-            year_max=yearmax,
-            data_path=winddatafolder,
-            n_turbine=numberofturbines,
-            force_run=True,
-            power_curve=powercurve,
+    if powercurvechoice == "Gross":
+        powercurve = np.loadtxt(
+            powercurvelocation + f"{int(turbsize)}_MW.csv",
+            delimiter=",",
+            skiprows=1,
         )
-        futureoffshoregenerators.append(thissizegenerator)
+    elif powercurvechoice == "Net":
+        powercurve =np.loadtxt(
+            "w:/SCORES-DATA/genericoffshorepowercurve.csv",
+            delimiter=",",
+            skiprows=1,
+        )
+        powercurve[:, 1] *= turbsize
 
-    solardatapath = "/Users/matt/SCORESdata/adjustedsolar/"
-
-    solardata = pd.read_excel(
-        "/Users/matt/code/transform/toptengenerators/top10solar_modified.xlsx"
-    )
-
-    solardata["site"], solardata["Within 100Km"] = Loaderfunctions.latlongtosite(
-        solardata["Latitude"],
-        solardata["Longitude"],
-        np.loadtxt(f"{solardatapath}site_locs.csv", skiprows=1, delimiter=","),
-    )
-
-    solarcapacity = 47
-    solardata["site"] = solardata["site"].astype(int)
-    solarsites = solardata["site"].unique()
-
-    solarcaps = [solarcapacity * 10**3 / len(solarsites)] * len(solarsites)
-
-    solargenerator = generation.SolarModel(
-        sites=solarsites,
+    thissizegenerator = generation.OffshoreWindModel(
+        turbine_size=turbsize,
+        sites=sites,
         year_min=yearmin,
         year_max=yearmax,
-        data_path=solardatapath,
-        plant_capacities=solarcaps,
+        data_path=winddatafolder,
+        n_turbine=numberofturbines,
         force_run=True,
+        power_curve=powercurve,
     )
+    futureoffshoregenerators.append(thissizegenerator)
 
-    generatorlist = (
-        [existingonshoregenerator, futureonshoregenerator]
-        + existingoffshoregenerators
-        + futureoffshoregenerators
-        + [solargenerator]
-    )
+solardatapath = "w:/SCORES-DATA/adjustedsolar/"
 
-    nuclearinstalled = 3
-    GasCCUSinstalled = 2
-    H2Pinstalled = 0.1
-    UnabatedGasinstalled = 32
-    Biomass = 2.5
-    BECCS = 0.5
-    Interconnectors = 12
+solardata = pd.read_excel(
+    "w:/SCORES-DATA//top10solar_modified.xlsx"
+)
 
-    longdurationstorage = storage.StorageModel(
-        cost_params_file=None,
-        storage_param_entry=None,
-        technical_params_file=None,
-        capacity=40 * 10**3,
-        max_c_rate=10,
-        max_d_rate=10,
-        self_dis=0,
-        eff_in=0.84,
-        eff_out=0.84,
-        storageCapex=1,
-        storageFixedOpex=1,
-        storagelifetime=1,
-        storageVarOpex=1,
-        chargeCapex=1,
-        chargeFixedOpex=1,
-        chargeVarOpex=1,
-        chargeLifetime=1,
-        dischargeCapex=1,
-        dischargeFixedOpex=1,
-        dischargeVarOpex=1,
-        dischargeLifetime=1,
-        hurdleRate=1,
-    )
-    lithiumstorage = storage.BatteryStorageModel(capacity=120 * 10**3)
+solardata["site"], solardata["Within 100Km"] = Loaderfunctions.latlongtosite(
+    solardata["Latitude"],
+    solardata["Longitude"],
+    np.loadtxt(f"{solardatapath}site_locs.csv", skiprows=1, delimiter=","),
+)
 
-    CCSDispatchable = generation.DispatchableGenerator(
-        sites=[1],
-        year_min=yearmin,
-        year_max=yearmax,
-        capacities=[GasCCUSinstalled * 10**3],
-        gentype="GasCCS",
-    )
-    H2PDispatchable = generation.DispatchableGenerator(
-        sites=[1],
-        year_min=yearmin,
-        year_max=yearmax,
-        capacities=[H2Pinstalled * 10**3],
-        gentype="H2P",
-    )
-    UnabatedGasDispatchable = generation.DispatchableGenerator(
-        sites=[1],
-        year_min=yearmin,
-        year_max=yearmax,
-        capacities=[UnabatedGasinstalled * 10**3],
-        gentype="Gas",
-    )
-    BiomassDispatchable = generation.DispatchableGenerator(
-        sites=[1],
-        year_min=yearmin,
-        year_max=yearmax,
-        capacities=[Biomass * 10**3],
-        gentype="Biomass",
-    )
-    BECCSDispatchable = generation.DispatchableGenerator(
-        sites=[1],
-        year_min=yearmin,
-        year_max=yearmax,
-        capacities=[BECCS * 10**3],
-        gentype="BECCS",
-    )
-    InterconnectorDispatchable = generation.Interconnector(
-        sites=[1],
-        year_min=yearmin,
-        year_max=yearmax,
-        capacities=[Interconnectors * 10**3],
-        gentype="Interconnector",
-    )
+solarcapacity = 47
+solardata["site"] = solardata["site"].astype(int)
+solarsites = solardata["site"].unique()
 
-    DispatchableAssetList = [
-        BECCSDispatchable,
-        BiomassDispatchable,
-        H2PDispatchable,
-        CCSDispatchable,
-        InterconnectorDispatchable,
-        UnabatedGasDispatchable,
-    ]
+solarcaps = [solarcapacity * 10**3 / len(solarsites)] * len(solarsites)
 
-    for i in range(len(futureoffshoregenerators)):
-        print(
-            f"Gensize:{futureoffshoregenerators[i].turbine_size}\tLoadFactor:{futureoffshoregenerators[i].get_load_factor()}"
-        )
-    nuclearloadfactor = 0.83
-    # demand = basedemand + (additionaldemand / 4) * 1000
-    demand = basedemand
-    netdemand = demand - nuclearloadfactor * nuclearinstalled * 1000
-    system = ElectricitySystem(
-        generatorlist,
-        [lithiumstorage, longdurationstorage],
-        netdemand,
-        DispatchableAssetList=DispatchableAssetList,
-        Interconnector=InterconnectorDispatchable,
-    )
-    system.update_surplus()
-    reliability = system.get_reliability()
-    nyears = yearmax - yearmin + 1
-    unabatedgaspercent = (
-        100 * np.sum(UnabatedGasDispatchable.power_out_array) / np.sum(demand)
-    )
-    gaspercent.append(unabatedgaspercent)
+solargenerator = generation.SolarModel(
+    sites=solarsites,
+    year_min=yearmin,
+    year_max=yearmax,
+    data_path=solardatapath,
+    plant_capacities=solarcaps,
+    force_run=True,
+)
+
+generatorlist = (
+    [existingonshoregenerator, futureonshoregenerator]
+    + existingoffshoregenerators
+    + futureoffshoregenerators
+    + [solargenerator]
+)
+
+nuclearinstalled = 3
+GasCCUSinstalled = 2
+H2Pinstalled = 0.1
+UnabatedGasinstalled = 32
+Biomass = 2.5
+BECCS = 0.5
+Interconnectors = 12
+
+longdurationstorage = storage.StorageModel(
+    cost_params_file=None,
+    storage_param_entry=None,
+    technical_params_file=None,
+    capacity=40 * 10**3,
+    max_c_rate=10,
+    max_d_rate=10,
+    self_dis=0,
+    eff_in=0.84,
+    eff_out=0.84,
+    storageCapex=1,
+    storageFixedOpex=1,
+    storagelifetime=1,
+    storageVarOpex=1,
+    chargeCapex=1,
+    chargeFixedOpex=1,
+    chargeVarOpex=1,
+    chargeLifetime=1,
+    dischargeCapex=1,
+    dischargeFixedOpex=1,
+    dischargeVarOpex=1,
+    dischargeLifetime=1,
+    hurdleRate=1,
+)
+lithiumstorage = storage.BatteryStorageModel(capacity=120 * 10**3)
+
+CCSDispatchable = generation.DispatchableGenerator(
+    sites=[1],
+    year_min=yearmin,
+    year_max=yearmax,
+    capacities=[GasCCUSinstalled * 10**3],
+    gentype="GasCCS",
+)
+H2PDispatchable = generation.DispatchableGenerator(
+    sites=[1],
+    year_min=yearmin,
+    year_max=yearmax,
+    capacities=[H2Pinstalled * 10**3],
+    gentype="H2P",
+)
+UnabatedGasDispatchable = generation.DispatchableGenerator(
+    sites=[1],
+    year_min=yearmin,
+    year_max=yearmax,
+    capacities=[UnabatedGasinstalled * 10**3],
+    gentype="Gas",
+)
+BiomassDispatchable = generation.DispatchableGenerator(
+    sites=[1],
+    year_min=yearmin,
+    year_max=yearmax,
+    capacities=[Biomass * 10**3],
+    gentype="Biomass",
+)
+BECCSDispatchable = generation.DispatchableGenerator(
+    sites=[1],
+    year_min=yearmin,
+    year_max=yearmax,
+    capacities=[BECCS * 10**3],
+    gentype="BECCS",
+)
+InterconnectorDispatchable = generation.Interconnector(
+    sites=[1],
+    year_min=yearmin,
+    year_max=yearmax,
+    capacities=[Interconnectors * 10**3],
+    gentype="Interconnector",
+)
+
+DispatchableAssetList = [
+    BECCSDispatchable,
+    BiomassDispatchable,
+    H2PDispatchable,
+    CCSDispatchable,
+    InterconnectorDispatchable,
+    UnabatedGasDispatchable,
+]
+
+for i in range(len(futureoffshoregenerators)):
     print(
-        f"Unabated gas %: {round(unabatedgaspercent, 2)}\tUnabated gas power out: {unabatedgaspercent*352/100} TWh"
+        f"Gensize:{futureoffshoregenerators[i].turbine_size}\tLoadFactor:{futureoffshoregenerators[i].get_load_factor()}"
     )
-    print(
-        f"Reliability:{round(reliability, 4)}\tLoss of load hours: {365.25*24*(100-reliability)/100}"
-    )
-    yearlycurtailement = system.storage.analyse_usage()[2] / (nyears * 10**6)
-    print(f"Yearly curtailment: {yearlycurtailement} TWh")
-    Interconnectorexport = InterconnectorDispatchable.total_exported / (nyears * 10**6)
-    Interconnectorimport = InterconnectorDispatchable.total_imported / (nyears * 10**6)
-    print(f"Interconnector export: {Interconnectorexport} TWh")
-    print(f"Interconnector import: {Interconnectorimport} TWh")
+nuclearloadfactor = 0.83
+# demand = basedemand + (additionaldemand / 4) * 1000
+demand = basedemand
+netdemand = demand - nuclearloadfactor * nuclearinstalled * 1000
+system = ElectricitySystem(
+    generatorlist,
+    [lithiumstorage, longdurationstorage],
+    netdemand,
+    DispatchableAssetList=DispatchableAssetList,
+    Interconnector=InterconnectorDispatchable,
+)
+system.update_surplus()
+reliability = system.get_reliability()
+nyears = yearmax - yearmin + 1
+unabatedgaspercent = (
+    100 * np.sum(UnabatedGasDispatchable.power_out_array) / np.sum(demand)
+)
+gaspercent.append(unabatedgaspercent)
+print(
+    f"Unabated gas %: {round(unabatedgaspercent, 2)}\tUnabated gas power out: {unabatedgaspercent*352/100} TWh"
+)
+print(
+    f"Reliability:{round(reliability, 4)}\tLoss of load hours: {365.25*24*(100-reliability)/100}"
+)
+yearlycurtailement = system.storage.analyse_usage()[2] / (nyears * 10**6)
+print(f"Yearly curtailment: {yearlycurtailement} TWh")
+Interconnectorexport = InterconnectorDispatchable.total_exported / (nyears * 10**6)
+Interconnectorimport = InterconnectorDispatchable.total_imported / (nyears * 10**6)
+print(f"Interconnector export: {Interconnectorexport} TWh")
+print(f"Interconnector import: {Interconnectorimport} TWh")
 
-    existingonshoreloadfactor = existingonshoregenerator.get_load_factor()
-    futureonshoreloadfactor = futureonshoregenerator.get_load_factor()
-    existingonshorecapacity = np.sum(existingonshoregenerator.total_installed_capacity)
-    futureonshorecapacity = np.sum(futureonshoregenerator.total_installed_capacity)
-    meanonshoreloadfactor = np.average(
-        [existingonshoreloadfactor, futureonshoreloadfactor],
-        weights=[existingonshorecapacity, futureonshorecapacity],
-    )
+existingonshoreloadfactor = existingonshoregenerator.get_load_factor()
+futureonshoreloadfactor = futureonshoregenerator.get_load_factor()
+existingonshorecapacity = np.sum(existingonshoregenerator.total_installed_capacity)
+futureonshorecapacity = np.sum(futureonshoregenerator.total_installed_capacity)
+meanonshoreloadfactor = np.average(
+    [existingonshoreloadfactor, futureonshoreloadfactor],
+    weights=[existingonshorecapacity, futureonshorecapacity],
+)
 
-    totalonshorepowerout = np.sum(existingonshoregenerator.power_out_array) + np.sum(
-        futureonshoregenerator.power_out_array
-    )
-    yearlyonshorepowerout = totalonshorepowerout / (nyears * 10**6)
+totalonshorepowerout = np.sum(existingonshoregenerator.power_out_array) + np.sum(
+    futureonshoregenerator.power_out_array
+)
+yearlyonshorepowerout = totalonshorepowerout / (nyears * 10**6)
 
-    existingoffshoreloadfactors = [
-        i.get_load_factor() for i in existingoffshoregenerators
-    ]
-    existingoffshorecapacities = [
-        i.total_installed_capacity for i in existingoffshoregenerators
-    ]
-    futureoffshoreloadfactors = [i.get_load_factor() for i in futureoffshoregenerators]
-    futureoffshorecapacities = [
-        i.total_installed_capacity for i in futureoffshoregenerators
-    ]
-    meanoffshoreloadfactor = np.average(
-        existingoffshoreloadfactors + futureoffshoreloadfactors,
-        weights=existingoffshorecapacities + futureoffshorecapacities,
-    )
+existingoffshoreloadfactors = [
+    i.get_load_factor() for i in existingoffshoregenerators
+]
+existingoffshorecapacities = [
+    i.total_installed_capacity for i in existingoffshoregenerators
+]
+futureoffshoreloadfactors = [i.get_load_factor() for i in futureoffshoregenerators]
+futureoffshorecapacities = [
+    i.total_installed_capacity for i in futureoffshoregenerators
+]
+meanoffshoreloadfactor = np.average(
+    existingoffshoreloadfactors + futureoffshoreloadfactors,
+    weights=existingoffshorecapacities + futureoffshorecapacities,
+)
 
-    totaloffshorepowerout = np.sum(
-        [np.sum(i.power_out_array) for i in existingoffshoregenerators]
-    ) + np.sum([np.sum(i.power_out_array) for i in futureoffshoregenerators])
-    yearlyoffshorepowerout = totaloffshorepowerout / (nyears * 10**6)
+totaloffshorepowerout = np.sum(
+    [np.sum(i.power_out_array) for i in existingoffshoregenerators]
+) + np.sum([np.sum(i.power_out_array) for i in futureoffshoregenerators])
+yearlyoffshorepowerout = totaloffshorepowerout / (nyears * 10**6)
 
-    summedoffshorepoweroutarray = np.sum(
-        np.vstack([i.power_out_array for i in existingoffshoregenerators]), axis=0
-    ) + np.sum(np.vstack([i.power_out_array for i in futureoffshoregenerators]), axis=0)
-    totaloffshorecapapcity = np.sum(existingoffshorecapacities) + np.sum(
-        futureoffshorecapacities
-    )
+summedoffshorepoweroutarray = np.sum(
+    np.vstack([i.power_out_array for i in existingoffshoregenerators]), axis=0
+) + np.sum(np.vstack([i.power_out_array for i in futureoffshoregenerators]), axis=0)
+totaloffshorecapapcity = np.sum(existingoffshorecapacities) + np.sum(
+    futureoffshorecapacities
+)
 
-    summedonshorepoweroutarray = (
-        existingonshoregenerator.power_out_array
-        + futureonshoregenerator.power_out_array
-    )
+summedonshorepoweroutarray = (
+    existingonshoregenerator.power_out_array
+    + futureonshoregenerator.power_out_array
+)
 
-    totalonshorecapacity = existingonshorecapacity + futureonshorecapacity
-    curtailedarray = system.storage.curtarray
-    gaspowerout = UnabatedGasDispatchable.power_out_array
-    interconnectoroutputarray = InterconnectorDispatchable.power_out_array
+totalonshorecapacity = existingonshorecapacity + futureonshorecapacity
+curtailedarray = system.storage.curtarray
+gaspowerout = UnabatedGasDispatchable.power_out_array
+interconnectoroutputarray = InterconnectorDispatchable.power_out_array
 
-    yearlysolarpowerout = np.sum(solargenerator.power_out_array) / (nyears * 10**6)
-    nuclearpowerout = np.sum(nuclearinstalled * nuclearloadfactor * 365.25 * 24) / (
-        10**3
-    )
-    biomasspowerout = np.sum(BiomassDispatchable.power_out_array) / (nyears * 10**6)
-    beccspowerout = np.sum(BECCSDispatchable.power_out_array) / (nyears * 10**6)
-    cleanpowersum = (
-        yearlyonshorepowerout
-        + yearlyoffshorepowerout
-        + yearlysolarpowerout
-        + nuclearpowerout
-        + biomasspowerout
-        + beccspowerout
-    )
-    print(f"Yearly onshore power out: {yearlyonshorepowerout} TWh")
-    print(f"Yearly offshore power out: {yearlyoffshorepowerout} TWh")
-    print(f"Yearly solar power out: {yearlysolarpowerout} TWh")
-    print(f"Yearly clean power out: {cleanpowersum} TWh")
-    print(f"Yearly biomass power out: {biomasspowerout} TWh")
-    print(f"BECCS power out: {beccspowerout} TWh")
-    print(f"Biomass load factor: {BiomassDispatchable.get_load_factor()}")
-    print(f"clean power fraction:{cleanpowersum/352}")
-    print(f"Yearly Solar power out: {yearlysolarpowerout} TWh")
-    print(f"Nuclear power out: {nuclearpowerout} TWh")
-
+yearlysolarpowerout = np.sum(solargenerator.power_out_array) / (nyears * 10**6)
+nuclearpowerout = np.sum(nuclearinstalled * nuclearloadfactor * 365.25 * 24) / (
+    10**3
+)
+biomasspowerout = np.sum(BiomassDispatchable.power_out_array) / (nyears * 10**6)
+beccspowerout = np.sum(BECCSDispatchable.power_out_array) / (nyears * 10**6)
+cleanpowersum = (
+    yearlyonshorepowerout
+    + yearlyoffshorepowerout
+    + yearlysolarpowerout
+    + nuclearpowerout
+    + biomasspowerout
+    + beccspowerout
+)
+print(f"Yearly onshore power out: {yearlyonshorepowerout} TWh")
+print(f"Yearly offshore power out: {yearlyoffshorepowerout} TWh")
+print(f"Yearly solar power out: {yearlysolarpowerout} TWh")
+print(f"Yearly clean power out: {cleanpowersum} TWh")
+print(f"Yearly biomass power out: {biomasspowerout} TWh")
+print(f"BECCS power out: {beccspowerout} TWh")
+print(f"Biomass load factor: {BiomassDispatchable.get_load_factor()}")
+print(f"clean power fraction:{cleanpowersum/352}")
+print(f"Yearly Solar power out: {yearlysolarpowerout} TWh")
+print(f"Nuclear power out: {nuclearpowerout} TWh")
+quit()
 
 # %
 np.save("gaspercent.npy", gaspercent)
