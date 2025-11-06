@@ -657,7 +657,7 @@ class NuclearModel(GenerationModel):
                 self.plant_capacities[sitenum] * self.loadfactor
             )
         self.scale_output(self.total_installed_capacity)
-
+        self.power_out_array = np.array(self.power_out)
 
 class GeothermalModel(GenerationModel):
     def __init__(
