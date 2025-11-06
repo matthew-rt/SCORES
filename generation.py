@@ -346,6 +346,7 @@ class DispatchableGenerator(GenerationModel):
         month_online=None,
         capacities=[1000],
         limits=[0, 1000000],
+        ramprate=0.25,
     ):
         """
         == description ==
@@ -371,6 +372,7 @@ class DispatchableGenerator(GenerationModel):
         month_online: list(int) month the generation unit was installed, at each site
         capacities: (Array <float>) installed capacity of each site in MW
         limits: (Array<float>) used to define the max and min installed generation in MW ([min,max])
+        ramprate: (float) ramp rate of the generation unit in % of full capacity per hour (0-1)
         == returns ==
         None
         """
@@ -401,6 +403,7 @@ class DispatchableGenerator(GenerationModel):
         self.max_possible_output = self.total_installed_capacity * len(
             self.power_out_array
         )
+        self.ramp_rate = ramprate
 
     def __str__(self):
         return f"{self.plant_type} Generator, total capacity: {self.total_installed_capacity} MW"
@@ -573,6 +576,7 @@ class NuclearModel(GenerationModel):
         lifetime=40,
         hurdlerate=0.1,
         loadfactor=0.77,
+        name="Large-scale ",
     ):
         """
         == description ==
@@ -604,6 +608,7 @@ class NuclearModel(GenerationModel):
         lifetime: (int) lifetime of the generation unit in years
         hurdlerate: (float) hurdle rate for the generation unit, between 0 and 1
         loadfactor: (float) load factor of the generation unit
+        name: (string) identifier for this nuclear object
         == returns ==
         None
         """
@@ -615,7 +620,7 @@ class NuclearModel(GenerationModel):
 
         super().__init__(
             sites,
-            "Nuclear",
+            f"{name} Nuclear",
             cost_param_entry,
             cost_params_file=cost_params_file,
             cost_sensitivity=cost_sensitivity,
@@ -657,6 +662,7 @@ class NuclearModel(GenerationModel):
                 self.plant_capacities[sitenum] * self.loadfactor
             )
         self.scale_output(self.total_installed_capacity)
+        self.power_out_array = np.array(self.power_out)
 
 
 class GeothermalModel(GenerationModel):
@@ -978,7 +984,6 @@ class OffshoreWindModel(GenerationModel):
         v_cut_in=None,
         v_cut_out=None,
         n_turbine=None,
-        turbine_scale=False,
         hub_height=None,
         data_path="",
         save_path="stored_model_runs/",
@@ -986,11 +991,20 @@ class OffshoreWindModel(GenerationModel):
         data_height=100,
         alpha=0.143,  # this row added by CQ to calculate wind shear
         power_curve=None,
+        density_correction=False,
+        supplementalpowercurves=None,
+        pressurefile="",
+        pressuresites=[],
+        temperaturefile="",
+        temperaturesites=[],
+        siteelevations=[],
         year_online=None,
         month_online=None,
         force_run=False,
         limits=[0, 1000000],
-        scaling_factor=1,
+        identifier="",
+        era_mean_wind_speed=None,
+        gwa_mean_wind_speed=None,
     ):  # this added by CQ so that a power curve can optionally be imported
         """
         == description ==
@@ -1025,13 +1039,28 @@ class OffshoreWindModel(GenerationModel):
         save: (boo) determines whether to save the results of the run
         alpha: (float) wind shear coefficient
         power_curve: (Array<float>) optional power curve - power outputs that correspond to v array spaced at 0.1m/s
+        supplementalpowercurves: powercurve for correcting for air density
+        pressurefile: (str) path to file containing pressure data for density correction
+        pressuresites: (Array<int>) sites for which pressure data is available
+        temperaturefile: (str) path to file containing temperature data for density correction
+        temperaturesites: (Array<int>) sites for which temperature data is available
+        siteelevations: (Array<float>) elevations of the sites in m
+        year_online: list(int) year the generation unit was installed, at each site
+        month_online: list(int) month the generation unit was installed, at each site
+        force_run: (bool) if True, forces the model to run even if a saved
+        run is found
+        limits: (Array<float>) used to define the max and min installed generation in MW ([
+        min,max])
+        identifier: (str) identifier, neccessary if running multiple generators of same type
+        era_mean_wind_speed: (Array<float>) mean wind speed from ERA5 data for each site
+        gwa_mean_wind_speed: (Array<float>) mean wind speed from GWA data for each site
         == returns ==
         None
         """
 
         super().__init__(
             sites,
-            "Offshore Wind",
+            f"{identifier}Offshore Wind",
             cost_param_entry,
             data_path=data_path,
             cost_params_file=cost_params_file,
@@ -1078,10 +1107,20 @@ class OffshoreWindModel(GenerationModel):
         self.n_turbine = n_turbine
         self.turbine_size = turbine_size
         self.hub_height = hub_height if hub_height != None else loadedhub_height
-
+        self.era_mean_wind_speed = era_mean_wind_speed
+        self.gwa_mean_wind_speed = gwa_mean_wind_speed
         self.data_height = data_height  # added by CQ
         self.alpha = alpha  # added by CQ
         self.power_curve = power_curve
+
+        self.density_correction = density_correction
+        self.supplemental_curves =supplementalpowercurves
+        self.pressurefile = pressurefile
+        self.pressuresites = pressuresites
+        self.temperaturefile = temperaturefile
+        self.temperaturesites = temperaturesites
+        self.siteelevations = siteelevations
+
         file_name = get_filename(
             sites, "osw_" + str(turbine_size), year_min, year_max, months
         )
@@ -1223,25 +1262,105 @@ class OffshoreWindModel(GenerationModel):
             # approach of calculating each point individually
             site_speeds = np.array(site_speeds)
             site_speeds = site_speeds.astype(float)
+            if self.era_mean_wind_speed is not None:
+                # scale the wind speeds to the ERA5 mean wind speed
+                site_speeds = (
+                    self.gwa_mean_wind_speed[si]
+                    * site_speeds
+                    / self.era_mean_wind_speed[si]
+                )
             site_speeds[site_speeds < 0] = 0
 
             # adjusts the wind speeds to hub height
             site_speeds = site_speeds * np.power(
                 self.hub_height / self.data_height, self.alpha
             )
+            if self.density_correction==False:
+                site_speeds[site_speeds >= self.v_cut_out] = (
+                    self.v_cut_out
+                )  # prevents overload
+                p1s = np.floor(site_speeds / 0.1).astype(
+                    int
+                )  # gets the index of the lower bound of the interpolation
+                p2s = p1s + 1  # gets the index of the upper bound of the interpolation
+                p2s[p2s == len(Parray)] = p1s[p2s == len(Parray)]
+                fs = (site_speeds % 0.1) / 0.1
+                poweroutvals = (fs * Parray[p2s] + (1 - fs) * Parray[p1s]) * self.n_turbine[
+                    si
+                ]  # interpolates the power output for the entire array
+            else:
 
-            site_speeds[site_speeds >= self.v_cut_out] = (
-                self.v_cut_out
-            )  # prevents overload
-            p1s = np.floor(site_speeds / 0.1).astype(
-                int
-            )  # gets the index of the lower bound of the interpolation
-            p2s = p1s + 1  # gets the index of the upper bound of the interpolation
-            p2s[p2s == len(Parray)] = p1s[p2s == len(Parray)]
-            fs = (site_speeds % 0.1) / 0.1
-            poweroutvals = (fs * Parray[p2s] + (1 - fs) * Parray[p1s]) * self.n_turbine[
-                si
-            ]  # interpolates the power output for the entire array
+                poweroutvals= np.zeros_like(site_speeds)  # creates zeros array to hold the power
+                if self.pressurefile == "" or self.temperaturefile == "":
+                    raise Exception(
+                        "Pressure and temperature files must be provided for density correction"
+                    )
+                firstdatadatetime = datetime.datetime(2020, 1, 1, 0, 0, 0) #hardcoded for now, as we assume the data starts at this date
+                # find the number of hours between the first date in the data and the first date in the simulation
+                firstdatadatehours = (
+                    self.startdatetime - firstdatadatetime
+                ).total_seconds() / 3600
+                tploadindex = int(firstdatadatehours)
+                pressuresite= self.pressuresites[si]
+                temperaturesite = self.temperaturesites[si]
+                pressure = np.loadtxt(
+                    f"{self.pressurefile}{str(pressuresite)}.csv", delimiter=",", skiprows=1, usecols=(2)
+                )
+                temperature = np.loadtxt(
+                    f"{self.temperaturefile}{str(temperaturesite)}.csv", delimiter=",", skiprows=1, usecols=(2)
+                )
+                print(pressure.shape)
+                pressure = pressure[
+                    tploadindex : self.loadindex + len(self.n_good_points)
+                ]
+                print("Pressure range selector index:", tploadindex)
+                temperature = temperature[
+                    tploadindex : self.loadindex + len(self.n_good_points)
+                ]
+                supplementalpowercurves=np.loadtxt(self.supplemental_curves,delimiter=",")
+                densities=supplementalpowercurves[0][1:]
+                mindensity= np.min(densities)
+                maxdensity= np.max(densities)
+                windspeeds=supplementalpowercurves[1:,0]
+                
+
+
+                pressure = pressure.astype(float)
+                print(pressure.shape)
+                temperature = temperature.astype(float)
+                print(temperature.shape)
+                siteelevation = self.siteelevations[si]
+                sitedensities= (pressure*np.exp((-9.80665*(siteelevation+self.hub_height))/(287.05*(temperature))))/(287.05*(temperature))
+                print(f"Site average density:{np.mean(sitedensities)} kg/m3")
+                maxsitedensities = np.max(sitedensities)
+                minsitedensities = np.min(sitedensities)
+                print(f"Site max density:{maxsitedensities} kg/m3")
+                print(f"Site min density:{minsitedensities} kg/m3")
+                if maxsitedensities > maxdensity:
+                    raise Exception(
+                        f"Site density {maxsitedensities} kg/m3 exceeds maximum density in power curve {maxdensity} kg/m3"
+                    )
+                if minsitedensities < mindensity:
+                    raise Exception(
+                        f"Site density {minsitedensities} kg/m3 is below minimum density in power curve {mindensity} kg/m3"
+                    )
+                sitedensities=np.round(sitedensities*40,0)/40
+                densities = np.round(densities*40,0)/40
+                for index, density in enumerate(densities):
+                    thisdensitypowercurve=supplementalpowercurves[1:,index+1]
+                    thisdensitypowercurve = np.array(thisdensitypowercurve)
+                    # thisdensitypowercurve*= self.turbine_size  # scale the power curve to the turbine size
+                    selectedhours=np.where(sitedensities==density)[0]
+                    selectedspeeds=site_speeds[selectedhours]
+                    #for each speed, find the closest speed in the power curve
+                    powercurveindeces=selectedspeeds/0.1
+                    powercurveindeces=np.floor(powercurveindeces).astype(int)
+                    powercurveindeces[powercurveindeces >= len(thisdensitypowercurve)] = 0
+                    #look up the indeces in the selected power curve
+                    thesepoweroutvals = thisdensitypowercurve[powercurveindeces] * self.n_turbine[si]
+                    poweroutvals[selectedhours] = thesepoweroutvals
+
+
             self.power_out_array[
                 rangeselectorindex - self.loadindex :
             ] += poweroutvals  # adds the power output to the total power output array
@@ -1287,6 +1406,7 @@ class SolarModel(GenerationModel):
         month_online=None,
         limits=[0, 1000000],
         force_run=False,
+        identifier="",
     ):
         """
         == description ==
@@ -1317,7 +1437,7 @@ class SolarModel(GenerationModel):
         """
         super().__init__(
             sites,
-            "Solar",
+            f"{identifier}Solar",
             cost_param_entry,
             data_path=data_path,
             cost_params_file=cost_params_file,
@@ -1686,7 +1806,6 @@ class OnshoreWindModel(GenerationModel):
         v_cut_in=None,
         v_cut_out=None,
         n_turbine=None,
-        turbine_scale=False,
         hub_height=None,
         data_path="",
         save_path="stored_model_runs/",
@@ -1705,7 +1824,9 @@ class OnshoreWindModel(GenerationModel):
         month_online=None,
         force_run=False,
         limits=[0, 1000000],
-        scaling_factor=1,
+        identifier="",
+        era_mean_wind_speed=None,
+        gwa_mean_wind_speed=None,
     ):
         """
         == description ==
@@ -1742,16 +1863,26 @@ class OnshoreWindModel(GenerationModel):
         alpha: (float) wind shear coefficient                          # added by CQ
         power_curve: (Array<float>) optional power curve - power outputs that correspond to v array spaced at 0.1m/s
         density_correction: (bool) whether to apply a density correction to the power curve
-        cp_curve: powercurve for correcting for air density
+        supplementalpowercurves: powercurve for correcting for air density
         pressurefile: (str) path to file containing pressure data for density correction
+        pressuresites: (Array<int>) sites for which pressure data is available
         temperaturefile: (str) path to file containing temperature data for density correction
+        temperaturesites: (Array<int>) sites for which temperature data is available
+        siteelevations: (Array<float>) elevations of the sites in m
+        year_online: (int) year in which the generator is operational
+        month_online: (int) month in which the generator is operational
+        force_run: (bool) determines whether to force the model to run
+        limits: (Array<float>) limits on the power output
+        identifier: (str) identifier for the generator, required if using more than one generator of the same type
+        era_mean_wind_speed: (Array<float>) mean wind speed from ERA5 data for each site
+        gwa_mean_wind_speed: (Array<float>) mean wind speed from GWA data for each site
         == returns ==
         None
         """
 
         super().__init__(
             sites,
-            "Onshore Wind",
+            f"{identifier}Onshore Wind",
             cost_param_entry,
             data_path=data_path,
             cost_params_file=cost_params_file,
@@ -1798,11 +1929,11 @@ class OnshoreWindModel(GenerationModel):
         self.n_turbine = n_turbine
         self.turbine_size = turbine_size
         self.hub_height = hub_height if hub_height != None else loadedhub_height
-
+        self.era_mean_wind_speed = era_mean_wind_speed
+        self.gwa_mean_wind_speed = gwa_mean_wind_speed
         self.data_height = data_height  # added by CQ
         self.alpha = alpha  # added by CQ
         self.power_curve = power_curve
-        self.scaling_factor = scaling_factor
 
         self.density_correction = density_correction
         self.supplemental_curves =supplementalpowercurves
@@ -1930,14 +2061,20 @@ class OnshoreWindModel(GenerationModel):
             # neededdata=splitdata[operationalindex:self.loadindex+len(self.n_good_points)]
             site_speeds = site_speeds.astype(float)
             site_speeds[site_speeds < 0] = 0
-            site_speeds = site_speeds * self.scaling_factor
-
+            if self.era_mean_wind_speed is not None:
+                # scale the wind speeds to the ERA5 mean wind speed
+                site_speeds = (
+                    self.gwa_mean_wind_speed[si]
+                    * site_speeds
+                    / self.era_mean_wind_speed[si]
+                )
+            site_speeds = site_speeds * np.power(
+                self.hub_height / self.data_height, self.alpha
+            )
             if self.density_correction==False:
 
                 # adjusts the wind speeds to hub height
-                site_speeds = site_speeds * np.power(
-                    self.hub_height / self.data_height, self.alpha
-                )
+
                 site_speeds[site_speeds > v[-1]] = v[-1]  # prevents overload
                 p1s = np.floor(site_speeds / 0.1).astype(
                     int
@@ -1961,7 +2098,7 @@ class OnshoreWindModel(GenerationModel):
                 firstdatadatehours = (
                     self.startdatetime - firstdatadatetime
                 ).total_seconds() / 3600
-                self.loadindex = int(firstdatadatehours)
+                tploadindex = int(firstdatadatehours)
                 pressuresite= self.pressuresites[si]
                 temperaturesite = self.temperaturesites[si]
                 pressure = np.loadtxt(
@@ -1970,39 +2107,47 @@ class OnshoreWindModel(GenerationModel):
                 temperature = np.loadtxt(
                     f"{self.temperaturefile}{str(temperaturesite)}.csv", delimiter=",", skiprows=1, usecols=(2)
                 )
-
+                print(pressure.shape)
                 pressure = pressure[
-                    rangeselectorindex : self.loadindex + len(self.n_good_points)
+                    tploadindex : self.loadindex + len(self.n_good_points)
                 ]
+                print("Pressure range selector index:", tploadindex)
                 temperature = temperature[
-                    rangeselectorindex : self.loadindex + len(self.n_good_points)
+                    tploadindex : self.loadindex + len(self.n_good_points)
                 ]
                 supplementalpowercurves=np.loadtxt(self.supplemental_curves,delimiter=",")
                 densities=supplementalpowercurves[0][1:]
                 mindensity= np.min(densities)
                 maxdensity= np.max(densities)
                 windspeeds=supplementalpowercurves[1:,0]
+                
 
 
                 pressure = pressure.astype(float)
+                print(pressure.shape)
                 temperature = temperature.astype(float)
+                print(temperature.shape)
                 siteelevation = self.siteelevations[si]
-                sitedensity= (pressure*np.exp((-9.80665*(siteelevation+self.hub_height))/(287.05*(temperature))))/(287.05*(temperature))
-                print(f"Site average density:{np.mean(sitedensity)} kg/m3")
-                maxsitedensity = np.max(sitedensity)
-                minsitedensity = np.min(sitedensity)
-                if maxsitedensity > maxdensity:
+                sitedensities= (pressure*np.exp((-9.80665*(siteelevation+self.hub_height))/(287.05*(temperature))))/(287.05*(temperature))
+                print(f"Site average density:{np.mean(sitedensities)} kg/m3")
+                maxsitedensities = np.max(sitedensities)
+                minsitedensities = np.min(sitedensities)
+                print(f"Site max density:{maxsitedensities} kg/m3")
+                print(f"Site min density:{minsitedensities} kg/m3")
+                if maxsitedensities > maxdensity:
                     raise Exception(
-                        f"Site density {maxsitedensity} kg/m3 exceeds maximum density in power curve {maxdensity} kg/m3"
+                        f"Site density {maxsitedensities} kg/m3 exceeds maximum density in power curve {maxdensity} kg/m3"
                     )
-                if minsitedensity < mindensity:
+                if minsitedensities < mindensity:
                     raise Exception(
-                        f"Site density {minsitedensity} kg/m3 is below minimum density in power curve {mindensity} kg/m3"
+                        f"Site density {minsitedensities} kg/m3 is below minimum density in power curve {mindensity} kg/m3"
                     )
                 sitedensities=np.round(sitedensities*40,0)/40
+                densities = np.round(densities*40,0)/40
                 for index, density in enumerate(densities):
                     thisdensitypowercurve=supplementalpowercurves[1:,index+1]
-                    thisdensitypowercurve = thisdensitypowercurve*self.turbine_size
+                    thisdensitypowercurve = np.array(thisdensitypowercurve)
+                    # thisdensitypowercurve*= self.turbine_size  # scale the power curve to the turbine size
                     selectedhours=np.where(sitedensities==density)[0]
                     selectedspeeds=site_speeds[selectedhours]
                     #for each speed, find the closest speed in the power curve
@@ -2012,7 +2157,6 @@ class OnshoreWindModel(GenerationModel):
                     #look up the indeces in the selected power curve
                     thesepoweroutvals = thisdensitypowercurve[powercurveindeces] * self.n_turbine[si]
                     poweroutvals[selectedhours] = thesepoweroutvals
-                
                 # adjusts the wind speeds to hub height
 
  
