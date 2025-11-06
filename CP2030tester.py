@@ -58,7 +58,9 @@ for year in range(numberofyears):
     basedemand[startindex:endindex] *= scalingfactor
     currentyear += 1
 
-print(np.max(basedemand))
+
+#assuming 8000MW of data centre demand 
+demand=basedemand+8000
 
 existingdata = pd.read_excel("w:/SCORES-DATA/repd-q3-oct-2024-trimmed.xlsx")
 existingonshore = existingdata[existingdata["Technology Type"] == "Wind Onshore"].copy()
@@ -304,12 +306,8 @@ solargenerator = generation.SolarModel(
     force_run=True,
 )
 
-generatorlist = (
-    [existingonshoregenerator, futureonshoregenerator]
-    + existingoffshoregenerators
-    + futureoffshoregenerators
-    + [solargenerator]
-)
+
+
 
 nuclearinstalled = 3
 GasCCUSinstalled = 2
@@ -319,6 +317,21 @@ Biomass = 2.5
 BECCS = 0.5
 Interconnectors = 12
 
+nucleargenerator = generation.NuclearModel(
+    sites=[1],
+    year_min=yearmin,
+    year_max=yearmax,
+    capacities=[nuclearinstalled * 10**3],
+    loadfactor=0.83,
+)
+print(nucleargenerator.power_out[0:100])
+generatorlist = (
+    [existingonshoregenerator, futureonshoregenerator]
+    + existingoffshoregenerators
+    + futureoffshoregenerators
+    + [solargenerator]
+    + [nucleargenerator]
+)
 longdurationstorage = storage.StorageModel(
     cost_params_file=None,
     storage_param_entry=None,
@@ -403,12 +416,10 @@ for i in range(len(futureoffshoregenerators)):
     )
 nuclearloadfactor = 0.83
 # demand = basedemand + (additionaldemand / 4) * 1000
-demand = basedemand
-netdemand = demand - nuclearloadfactor * nuclearinstalled * 1000
 system = ElectricitySystem(
     generatorlist,
     [lithiumstorage, longdurationstorage],
-    netdemand,
+    demand,
     DispatchableAssetList=DispatchableAssetList,
     Interconnector=InterconnectorDispatchable,
 )
@@ -484,9 +495,7 @@ gaspowerout = UnabatedGasDispatchable.power_out_array
 interconnectoroutputarray = InterconnectorDispatchable.power_out_array
 
 yearlysolarpowerout = np.sum(solargenerator.power_out_array) / (nyears * 10**6)
-nuclearpowerout = np.sum(nuclearinstalled * nuclearloadfactor * 365.25 * 24) / (
-    10**3
-)
+nuclearpowerout = np.sum(nucleargenerator.power_out_array) / (nyears * 10**6)
 biomasspowerout = np.sum(BiomassDispatchable.power_out_array) / (nyears * 10**6)
 beccspowerout = np.sum(BECCSDispatchable.power_out_array) / (nyears * 10**6)
 cleanpowersum = (
@@ -504,7 +513,7 @@ print(f"Yearly clean power out: {cleanpowersum} TWh")
 print(f"Yearly biomass power out: {biomasspowerout} TWh")
 print(f"BECCS power out: {beccspowerout} TWh")
 print(f"Biomass load factor: {BiomassDispatchable.get_load_factor()}")
-print(f"clean power fraction:{cleanpowersum/352}")
+print(f"clean power fraction:{cleanpowersum/(totaldemand+(8*365.25*24)/1000)}")
 print(f"Yearly Solar power out: {yearlysolarpowerout} TWh")
 print(f"Nuclear power out: {nuclearpowerout} TWh")
 quit()
