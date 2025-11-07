@@ -43,6 +43,7 @@ class ElectricitySystem:
         DispatchableAssetList=None,
         DispatchTimeHorizon=24,
         Interconnector=None,
+        Flexibledemand=0,
     ):
         """
         == description ==
@@ -60,6 +61,10 @@ class ElectricitySystem:
         strategy: (str) the strategy for operating the assets. Options:
                 'ordered' - charges/discharges according to self.c_order/d_order
                 'balanced' - ?
+        aggEVlist: list of the EVs which can be used for flex
+        Dispatchable asset list: list of dispatchable assets which can be used to meet demand, in merit order
+        DispatchTimeHorizon: Number of hours in the future to consider when dispatching assets
+        Interconnector: Amount of interconnectors which could be used 
         == returns ==
         None
 
@@ -90,7 +95,7 @@ class ElectricitySystem:
             DispatchTimeHorizon=DispatchTimeHorizon,
             Interconnector=Interconnector,
         )
-
+        self.flexible_demand= Flexibledemand
         for gen in self.gen_list:
             # if max(gen.power_out_scaled) == 0:
             #     gen.scale_output(1)
@@ -199,6 +204,7 @@ class ElectricitySystem:
             start_up_time=start_up_time,
             return_output=return_output,
             strategy=strategy,
+            flexible_demand=self.flexible_demand,
         )
         return rel
 

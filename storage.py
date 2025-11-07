@@ -965,6 +965,7 @@ class MultipleStorageAssets:
         return_output=False,
         start_up_time=0,
         return_di_av=False,
+        flexible_demand=0
     ):
         """
         == description ==
@@ -995,6 +996,7 @@ class MultipleStorageAssets:
         remaining_surplus = [0] * len(
             surplus
         )  # keeps track of the remaining surplus after each timestep
+        self.flexible_demandtimeseries=[0]* len(surplus)  # keeps track of the flexible demand timeseries
         self.curtarray = np.zeros(
             len(surplus)
         )  # keeps track of the total surplus that could not be stored
@@ -1034,7 +1036,12 @@ class MultipleStorageAssets:
             self.self_discharge_timestep()
 
             t_surplus = copy.deepcopy(surplus[t])
-
+            if t_surplus>flexible_demand:
+                t_surplus -= flexible_demand
+                self.flexible_demandtimeseries[t] = flexible_demand
+            elif t_surplus>0:
+                self.flexible_demandtimeseries[t] = t_surplus
+                t_surplus = 0
             if t_surplus > 0:
                 # if the surplus is positive, then we want to charge the storage assets
                 for i in range(self.n_assets):
@@ -1179,6 +1186,7 @@ class MultipleStorageAssets:
         start_up_time=0,
         strategy="ordered",
         return_di_av=False,
+        flexible_demand=0,
     ):
         """
         == description ==
@@ -1208,6 +1216,7 @@ class MultipleStorageAssets:
                 return_output=return_output,
                 start_up_time=start_up_time,
                 return_di_av=return_di_av,
+                flexible_demand=flexible_demand,
             )
         self.actual_reliability = res
         return res
