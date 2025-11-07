@@ -60,8 +60,13 @@ for year in range(numberofyears):
 
 
 #assuming 8000MW of data centre demand 
-demand=basedemand+8000
+datacentredemand=4000
+print(f"Data centre demand (MW):{datacentredemand}")
+print(max(basedemand))
 
+# demand=basedemand +datacentredemand
+demand=basedemand
+print(max(demand))
 existingdata = pd.read_excel("w:/SCORES-DATA/repd-q3-oct-2024-trimmed.xlsx")
 existingonshore = existingdata[existingdata["Technology Type"] == "Wind Onshore"].copy()
 existingonshore = existingonshore[
@@ -228,7 +233,7 @@ existingoffshorecapacity = np.sum(
 )
 
 futurecapacity = np.sum(futureoffshore["Installed Capacity (MWelec)"])
-offshorecapacity = 50
+offshorecapacity = 45
 requiredfuturecapacity = offshorecapacity * 10**3 - existingoffshorecapacity
 scalesize = requiredfuturecapacity / futurecapacity
 
@@ -315,7 +320,7 @@ H2Pinstalled = 0.1
 UnabatedGasinstalled = 32
 Biomass = 2.5
 BECCS = 0.5
-Interconnectors = 12
+Interconnectors = 13*0.9
 
 nucleargenerator = generation.NuclearModel(
     sites=[1],
@@ -324,7 +329,6 @@ nucleargenerator = generation.NuclearModel(
     capacities=[nuclearinstalled * 10**3],
     loadfactor=0.83,
 )
-print(nucleargenerator.power_out[0:100])
 generatorlist = (
     [existingonshoregenerator, futureonshoregenerator]
     + existingoffshoregenerators
@@ -356,7 +360,7 @@ longdurationstorage = storage.StorageModel(
     dischargeLifetime=1,
     hurdleRate=1,
 )
-lithiumstorage = storage.BatteryStorageModel(capacity=120 * 10**3)
+lithiumstorage = storage.BatteryStorageModel(capacity=(120) * 10**3)
 
 CCSDispatchable = generation.DispatchableGenerator(
     sites=[1],
@@ -422,12 +426,31 @@ system = ElectricitySystem(
     demand,
     DispatchableAssetList=DispatchableAssetList,
     Interconnector=InterconnectorDispatchable,
+    Flexibledemand=datacentredemand
 )
 system.update_surplus()
 reliability = system.get_reliability()
+flextimeseries= system.storage.flexible_demandtimeseries
+print(max(flextimeseries))
+plt.plot(flextimeseries)
+plt.show()
+
+totaldatacentredemand=np.sum(flextimeseries)
+datacentredemandpercent=totaldatacentredemand / (len(flextimeseries) * datacentredemand )
+print(f"Data centre share of requested max demand {datacentredemandpercent}")
+#count hours where datacentredemand is operating at its max
+maxdemandcount=0
+for i in range(len(flextimeseries)):
+    if flextimeseries[i] == datacentredemand:
+        maxdemandcount += 1
+print(f"Data % of  hours at max demand: {maxdemandcount/ len(flextimeseries)}")
 nyears = yearmax - yearmin + 1
+
+# unabatedgaspercent = (
+#     100 * np.sum(UnabatedGasDispatchable.power_out_array) / np.sum(demand)
+# )
 unabatedgaspercent = (
-    100 * np.sum(UnabatedGasDispatchable.power_out_array) / np.sum(demand)
+    100 * np.sum(UnabatedGasDispatchable.power_out_array) / (np.sum(demand)+totaldatacentredemand)
 )
 gaspercent.append(unabatedgaspercent)
 print(
@@ -513,7 +536,7 @@ print(f"Yearly clean power out: {cleanpowersum} TWh")
 print(f"Yearly biomass power out: {biomasspowerout} TWh")
 print(f"BECCS power out: {beccspowerout} TWh")
 print(f"Biomass load factor: {BiomassDispatchable.get_load_factor()}")
-print(f"clean power fraction:{cleanpowersum/(totaldemand+(8*365.25*24)/1000)}")
+print(f"clean power fraction:{cleanpowersum/(totaldemand+(totaldatacentredemand/nyears)/10**6)}")
 print(f"Yearly Solar power out: {yearlysolarpowerout} TWh")
 print(f"Nuclear power out: {nuclearpowerout} TWh")
 quit()
