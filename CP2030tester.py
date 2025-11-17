@@ -60,7 +60,7 @@ for year in range(numberofyears):
 
 
 #assuming 8000MW of data centre demand 
-datacentredemand=4000
+datacentredemand=0
 print(f"Data centre demand (MW):{datacentredemand}")
 print(max(basedemand))
 
@@ -436,8 +436,8 @@ plt.plot(flextimeseries)
 plt.show()
 
 totaldatacentredemand=np.sum(flextimeseries)
-datacentredemandpercent=totaldatacentredemand / (len(flextimeseries) * datacentredemand )
-print(f"Data centre share of requested max demand {datacentredemandpercent}")
+# datacentredemandpercent=totaldatacentredemand / (len(flextimeseries) * datacentredemand )
+# print(f"Data centre share of requested max demand {datacentredemandpercent}")
 #count hours where datacentredemand is operating at its max
 maxdemandcount=0
 for i in range(len(flextimeseries)):
