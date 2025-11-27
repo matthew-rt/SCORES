@@ -346,6 +346,7 @@ class DispatchableGenerator(GenerationModel):
         month_online=None,
         capacities=[1000],
         limits=[0, 1000000],
+        DCdemand=False,
     ):
         """
         == description ==
@@ -396,7 +397,7 @@ class DispatchableGenerator(GenerationModel):
             month_online=month_online,
         )
         self.total_installed_capacity = sum(capacities)
-
+        self.DCdemand = DCdemand 
         self.plant_type = gentype
         self.max_possible_output = self.total_installed_capacity * len(
             self.power_out_array
@@ -448,6 +449,7 @@ class Interconnector(GenerationModel):
         limits=[0, 1000000],
         lifetime=40,
         hurdlerate=0.07,
+        DCdemand=False,
     ):
         """
         == description ==
@@ -496,6 +498,7 @@ class Interconnector(GenerationModel):
         self.total_exported = 0
         self.total_imported = 0
         self.plant_type = gentype
+        self.DCdemand = DCdemand
 
     def __str__(self):
         return f"{self.plant_type} Generator, total capacity: {self.total_installed_capacity} MW"
