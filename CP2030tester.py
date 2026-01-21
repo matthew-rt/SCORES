@@ -60,13 +60,19 @@ for year in range(numberofyears):
 
 
 #assuming 8000MW of data centre demand 
-datacentredemand=0
+datacentredemand=6000 
+solarcapacity = 47
+onshorecapacity = 27
+offshorecapacity = 42
+
+
 print(f"Data centre demand (MW):{datacentredemand}")
 print(max(basedemand))
-
 # demand=basedemand +datacentredemand
+
 demand=basedemand
 print(max(demand))
+#%%
 existingdata = pd.read_excel("w:/SCORES-DATA/repd-q3-oct-2024-trimmed.xlsx")
 existingonshore = existingdata[existingdata["Technology Type"] == "Wind Onshore"].copy()
 existingonshore = existingonshore[
@@ -138,7 +144,7 @@ else:
 gaspercent = []
 additionaldemandlist = []
 offshorewindreduction = []
-
+print("Simulating existing onshore wind")
 totalinstalledcapacity = np.sum(onshoresitecapacities)
 existingonshoregenerator = generation.OnshoreWindModel(
     sites=existingonshoresites,
@@ -150,7 +156,6 @@ existingonshoregenerator = generation.OnshoreWindModel(
     force_run=True,
     power_curve=existingonshorepowercurve,
 )
-onshorecapacity = 30
 futureonshoreinstall = onshorecapacity * 10**3 - totalinstalledcapacity
 
 scalesize = futureonshoreinstall / totalinstalledcapacity
@@ -168,7 +173,7 @@ else:
         delimiter=",",
         skiprows=1,
     )
-
+print("Simulating future onshore wind")
 futureonshoregenerator = generation.OnshoreWindModel(
     turbine_size=7,
     sites=existingonshoresites,
@@ -183,6 +188,7 @@ futureonshoregenerator = generation.OnshoreWindModel(
 
 existingoffshoresizes = existingoffshore["Comb turbine size"].unique().tolist()
 existingoffshoregenerators = []
+print("Simulating existing offshore wind")
 for turbsize in existingoffshoresizes:
     thisturbinsizedata = existingoffshore[
         existingoffshore["Comb turbine size"] == turbsize
@@ -233,13 +239,12 @@ existingoffshorecapacity = np.sum(
 )
 
 futurecapacity = np.sum(futureoffshore["Installed Capacity (MWelec)"])
-offshorecapacity = 45
 requiredfuturecapacity = offshorecapacity * 10**3 - existingoffshorecapacity
 scalesize = requiredfuturecapacity / futurecapacity
 
 futureoffshoresizes = futureoffshore["Comb turbine size"].unique().tolist()
 futureoffshoregenerators = []
-
+print("Simulating future offshore wind")
 for turbsize in futureoffshoresizes:
     thisturbinsizedata = futureoffshore[
         futureoffshore["Comb turbine size"] == turbsize
@@ -289,14 +294,13 @@ solardatapath = "w:/SCORES-DATA/adjustedsolar/"
 solardata = pd.read_excel(
     "w:/SCORES-DATA//top10solar_modified.xlsx"
 )
-
+print("Simulating solar")
 solardata["site"], solardata["Within 100Km"] = Loaderfunctions.latlongtosite(
     solardata["Latitude"],
     solardata["Longitude"],
     np.loadtxt(f"{solardatapath}site_locs.csv", skiprows=1, delimiter=","),
 )
 
-solarcapacity = 47
 solardata["site"] = solardata["site"].astype(int)
 solarsites = solardata["site"].unique()
 
@@ -312,12 +316,12 @@ solargenerator = generation.SolarModel(
 )
 
 
+#%%
 
-
-nuclearinstalled = 3
+nuclearinstalled = 5
 GasCCUSinstalled = 2
 H2Pinstalled = 0.1
-UnabatedGasinstalled = 32
+UnabatedGasinstalled = 34
 Biomass = 2.5
 BECCS = 0.5
 Interconnectors = 13*0.9
@@ -362,12 +366,14 @@ longdurationstorage = storage.StorageModel(
 )
 lithiumstorage = storage.BatteryStorageModel(capacity=(120) * 10**3)
 
+usedispatchableforDC= False
 CCSDispatchable = generation.DispatchableGenerator(
     sites=[1],
     year_min=yearmin,
     year_max=yearmax,
     capacities=[GasCCUSinstalled * 10**3],
     gentype="GasCCS",
+    DCdemand=usedispatchableforDC,
 )
 H2PDispatchable = generation.DispatchableGenerator(
     sites=[1],
@@ -375,6 +381,7 @@ H2PDispatchable = generation.DispatchableGenerator(
     year_max=yearmax,
     capacities=[H2Pinstalled * 10**3],
     gentype="H2P",
+    DCdemand=usedispatchableforDC,
 )
 UnabatedGasDispatchable = generation.DispatchableGenerator(
     sites=[1],
@@ -382,6 +389,7 @@ UnabatedGasDispatchable = generation.DispatchableGenerator(
     year_max=yearmax,
     capacities=[UnabatedGasinstalled * 10**3],
     gentype="Gas",
+    DCdemand=False,
 )
 BiomassDispatchable = generation.DispatchableGenerator(
     sites=[1],
@@ -389,6 +397,7 @@ BiomassDispatchable = generation.DispatchableGenerator(
     year_max=yearmax,
     capacities=[Biomass * 10**3],
     gentype="Biomass",
+    DCdemand=usedispatchableforDC,
 )
 BECCSDispatchable = generation.DispatchableGenerator(
     sites=[1],
@@ -396,6 +405,7 @@ BECCSDispatchable = generation.DispatchableGenerator(
     year_max=yearmax,
     capacities=[BECCS * 10**3],
     gentype="BECCS",
+    DCdemand=usedispatchableforDC,
 )
 InterconnectorDispatchable = generation.Interconnector(
     sites=[1],
@@ -403,7 +413,9 @@ InterconnectorDispatchable = generation.Interconnector(
     year_max=yearmax,
     capacities=[Interconnectors * 10**3],
     gentype="Interconnector",
+    DCdemand=usedispatchableforDC,
 )
+
 
 DispatchableAssetList = [
     BECCSDispatchable,
@@ -419,33 +431,43 @@ for i in range(len(futureoffshoregenerators)):
         f"Gensize:{futureoffshoregenerators[i].turbine_size}\tLoadFactor:{futureoffshoregenerators[i].get_load_factor()}"
     )
 nuclearloadfactor = 0.83
-# demand = basedemand + (additionaldemand / 4) * 1000
+# demand = basedemand + (additionaldemand / 4) * 1000]
+print("Simulating system")
 system = ElectricitySystem(
     generatorlist,
     [lithiumstorage, longdurationstorage],
     demand,
     DispatchableAssetList=DispatchableAssetList,
     Interconnector=InterconnectorDispatchable,
-    Flexibledemand=datacentredemand
+    Flexibledemand=datacentredemand,
 )
+
+# system = ElectricitySystem(
+#     generatorlist,
+#     [lithiumstorage, longdurationstorage],
+#     demand,
+#     DispatchableAssetList=DispatchableAssetList,
+#     Interconnector=InterconnectorDispatchable,
+#     Flexibledemand=0,
+# )
 system.update_surplus()
 reliability = system.get_reliability()
 flextimeseries= system.storage.flexible_demandtimeseries
 print(max(flextimeseries))
-plt.plot(flextimeseries)
-plt.show()
 
+demand=demand+ flextimeseries
+#%%
 totaldatacentredemand=np.sum(flextimeseries)
-# datacentredemandpercent=totaldatacentredemand / (len(flextimeseries) * datacentredemand )
-# print(f"Data centre share of requested max demand {datacentredemandpercent}")
+datacentredemandpercent=totaldatacentredemand / (len(flextimeseries) * datacentredemand )
+print(f"Data centre share of requested max demand {datacentredemandpercent}")
 #count hours where datacentredemand is operating at its max
+
 maxdemandcount=0
 for i in range(len(flextimeseries)):
     if flextimeseries[i] == datacentredemand:
         maxdemandcount += 1
 print(f"Data % of  hours at max demand: {maxdemandcount/ len(flextimeseries)}")
 nyears = yearmax - yearmin + 1
-
 # unabatedgaspercent = (
 #     100 * np.sum(UnabatedGasDispatchable.power_out_array) / np.sum(demand)
 # )
@@ -516,7 +538,117 @@ totalonshorecapacity = existingonshorecapacity + futureonshorecapacity
 curtailedarray = system.storage.curtarray
 gaspowerout = UnabatedGasDispatchable.power_out_array
 interconnectoroutputarray = InterconnectorDispatchable.power_out_array
+offshorepowerout=np.sum([i.power_out_array for i in existingoffshoregenerators], axis=0) + np.sum([i.power_out_array for i in futureoffshoregenerators], axis=0)
+onshorepowerout = existingonshoregenerator.power_out_array + futureonshoregenerator.power_out_array
+solarpowerout = solargenerator.power_out_array
+gaspowerout = UnabatedGasDispatchable.power_out_array
+nuclearpoweroutarray = nucleargenerator.power_out_array
+biomasspoweroutarray = BiomassDispatchable.power_out_array
+beccspoweroutarray = BECCSDispatchable.power_out_array
 
+cleanpowersumarray=np.sum([offshorepowerout, onshorepowerout, solarpowerout, nuclearpoweroutarray, biomasspoweroutarray, beccspoweroutarray], axis=0)
+cleanpowersumarray=cleanpowersumarray- curtailedarray
+#%%
+years= np.arange(yearmin, yearmax + 1)
+datastart= datetime.datetime(yearmin, 1, 1)
+onshorewindloadfactors=[]
+offshorewindloadfactors = []
+solarloadfactors=[]
+economiccurtailment=[]
+cleanpowerfraction=[]
+cleanpowertwh=[]
+interconnectorexport=[]
+interconnectorimport=[]
+gaspercent=[]
+curtailedfractions=[]
+for year in years:
+    thisyearstart= datetime.datetime(year, 1,1)
+    thisyearend = datetime.datetime(year + 1, 1, 1)
+    startindex = int((thisyearstart - datastart).total_seconds() / 3600)
+    endindex = int((thisyearend - datastart).total_seconds() / 3600)
+    onshorewindloadfactors.append(
+        np.sum(summedonshorepoweroutarray[startindex:endindex])/(onshorecapacity * (endindex - startindex)*1000))
+    offshorewindloadfactors.append(
+        np.sum(summedoffshorepoweroutarray[startindex:endindex])/(offshorecapacity  * (endindex - startindex)*1000))
+    solarloadfactors.append(
+        np.sum(solarpowerout[startindex:endindex])/(solarcapacity * (endindex - startindex)*1000))
+    economiccurtailment.append(
+        np.sum(curtailedarray[startindex:endindex]) / 10**6)
+    curtailedfractions.append(100*np.sum(curtailedarray[startindex:endindex]) / (
+        np.sum(demand[startindex:endindex])))
+    gaspercent.append(100*np.sum(gaspowerout[startindex:endindex]) / (np.sum(demand[startindex:endindex])) )
+
+    cleanpowertwh.append(np.sum(cleanpowersumarray[startindex:endindex]) / 10**6)
+    cleanpowerfraction.append(100*
+        np.sum(cleanpowersumarray[startindex:endindex]) / (np.sum(demand[startindex:endindex]) ))
+
+
+    interconnectorexport.append(-np.sum(interconnectoroutputarray[startindex:endindex][interconnectoroutputarray[startindex:endindex] < 0]) / 10**6)
+    interconnectorimport.append(np.sum(interconnectoroutputarray[startindex:endindex][interconnectoroutputarray[startindex:endindex] > 0]) / 10**6)
+
+
+#%%
+meannormalisedonshoreloadfactor = np.array(onshorewindloadfactors)/np.mean(onshorewindloadfactors)
+meannormalisedoffshoreloadfactor = np.array(offshorewindloadfactors)/np.mean(offshorewindloadfactors)
+meannormalisedsolarloadfactor = np.array(solarloadfactors)/np.mean(solarloadfactors)
+
+stackeddata= np.vstack([cleanpowerfraction,curtailedfractions])
+#create a grid of 6 subplots, 2 columns and 3 rows
+colorpalette=sns.color_palette("deep")
+fig, axs = plt.subplots(2, 2, figsize=(12, 12))
+thislinewidth = 3
+axs[0, 0].plot(years, meannormalisedonshoreloadfactor, label="ONW", color=colorpalette[0], linewidth=thislinewidth)
+axs[0,0].plot(years, meannormalisedoffshoreloadfactor,  label="OFW", color=colorpalette[1],linewidth=thislinewidth)
+axs[0,0].plot(years, meannormalisedsolarloadfactor,  label="Solar", color=colorpalette[2],linewidth=thislinewidth)
+axs[0, 0].set_title("Normalised Load Factors")
+axs[0, 0].set_xlabel("Year")
+axs[0, 0].set_ylabel("Normalised Load Factor")
+axs[0, 0].legend()
+axs[0,1].stackplot(years, stackeddata, labels=[ "Clean Power","Curtailed Power"], 
+                   colors=[colorpalette[3], colorpalette[4]], alpha=[0.5,0.5])
+axs[0,1].set_title("Economic Curtailment and Clean Power")
+axs[0,1].set_xlabel("Year")
+axs[0,1].set_ylabel("% of demand")
+axs[0,1].axhline(y=100, color="k", linestyle="--")
+axs[0,1].legend()
+# axs[0,1].plot(years, economiccurtailment,color=colorpalette[3])
+# axs[0,1].set_title("Economic Curtailment")
+# axs[0,1].set_xlabel("Year")
+# axs[0,1].set_ylabel("TWh")
+axs[1, 0].plot(years, gaspercent, color=colorpalette[5],linewidth=thislinewidth)
+axs[1, 0].set_title("Gas % of demand")
+axs[1, 0].set_xlabel("Year")
+axs[1, 0].set_ylabel("Gas %")
+#add a horizontal line at 5%
+axs[1, 0].axhline(y=5, color="r", linestyle="--")
+# axs[1, 1].plot(years, cleanpowerfraction, color=colorpalette[5])
+# axs[1, 1].set_title("Clean Power Fraction")
+# axs[1, 1].set_xlabel("Year")
+# axs[1, 1].set_ylabel("Clean Power Fraction")
+# axs[1,1].axhline(y=100, color="r", linestyle="--")
+
+axs[1,1].plot(years, interconnectorexport, color=colorpalette[6], label="Export",linewidth=thislinewidth)
+axs[1,1].plot(years, interconnectorimport, color=colorpalette[7], label="Import",linewidth=thislinewidth)
+axs[1,1].set_title("Interconnector Flow")
+axs[1,1].set_xlabel("Year")
+axs[1,1].set_ylabel("TWh")
+axs[1,1].legend()
+
+# axs[2, 0].plot(years, interconnectorexport, color=colorpalette[6])
+# axs[2, 0].set_title("Interconnector Export")
+# axs[2, 0].set_xlabel("Year")
+# axs[2, 0].set_ylabel("TWh")
+# axs[2, 1].plot(years, interconnectorimport,color=colorpalette[7])
+# axs[2, 1].set_title("Interconnector Import")
+# axs[2, 1].set_xlabel("Year")
+# axs[2, 1].set_ylabel("TWh")
+plt.tight_layout()
+plt.savefig("CP20306GWFlexDC.png", dpi=300)
+plt.show()
+#%%
+manddatacentredemandpercent=totaldatacentredemand / (len(flextimeseries) * datacentredemand )
+print(f"Data centre share of requested max demand {datacentredemandpercent}")
+#%%
 yearlysolarpowerout = np.sum(solargenerator.power_out_array) / (nyears * 10**6)
 nuclearpowerout = np.sum(nucleargenerator.power_out_array) / (nyears * 10**6)
 biomasspowerout = np.sum(BiomassDispatchable.power_out_array) / (nyears * 10**6)
@@ -529,6 +661,9 @@ cleanpowersum = (
     + biomasspowerout
     + beccspowerout
 )
+
+
+
 print(f"Yearly onshore power out: {yearlyonshorepowerout} TWh")
 print(f"Yearly offshore power out: {yearlyoffshorepowerout} TWh")
 print(f"Yearly solar power out: {yearlysolarpowerout} TWh")
@@ -539,14 +674,14 @@ print(f"Biomass load factor: {BiomassDispatchable.get_load_factor()}")
 print(f"clean power fraction:{cleanpowersum/(totaldemand+(totaldatacentredemand/nyears)/10**6)}")
 print(f"Yearly Solar power out: {yearlysolarpowerout} TWh")
 print(f"Nuclear power out: {nuclearpowerout} TWh")
-quit()
 
 # %
-np.save("gaspercent.npy", gaspercent)
-np.save("unabatedgaspercent.npy", gaspercent)
+# np.save("gaspercent.npy", gaspercent)
+# np.save("unabatedgaspercent.npy", gaspercent)
 # %%
 
 Interconnectorimport = InterconnectorDispatchable.total_imported / (nyears * 10**6)
+
 
 existingoffshoreloadfactors = [i.get_load_factor() for i in existingoffshoregenerators]
 existingoffshorecapacities = [
