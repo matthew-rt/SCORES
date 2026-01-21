@@ -347,6 +347,7 @@ class DispatchableGenerator(GenerationModel):
         capacities=[1000],
         limits=[0, 1000000],
         ramprate=0.25,
+        DCdemand=False,
     ):
         """
         == description ==
@@ -398,7 +399,7 @@ class DispatchableGenerator(GenerationModel):
             month_online=month_online,
         )
         self.total_installed_capacity = sum(capacities)
-
+        self.DCdemand = DCdemand 
         self.plant_type = gentype
         self.max_possible_output = self.total_installed_capacity * len(
             self.power_out_array
@@ -408,7 +409,7 @@ class DispatchableGenerator(GenerationModel):
     def __str__(self):
         return f"{self.plant_type} Generator, total capacity: {self.total_installed_capacity} MW"
 
-    def dispatch(self, t, demand):
+    def dispatch(self, t, demand,flexible_demand=0):
         """
         == description ==
         This function dispatches the generator in an attempt to meet surplus demand
@@ -416,18 +417,30 @@ class DispatchableGenerator(GenerationModel):
         == parameters ==
         t: (int) time index
         demand: (float) demand at time t. This will be a negative value
-
+        flexible_demand: (float) flexible demand at time t. This will be a positive value, and will be met only if there is remaining capacity
         == returns ==
         (float) unmet demand
+        (float) unmetflexible demand 
         """
         if demand + self.total_installed_capacity < 0:
             self.power_out[t] = self.total_installed_capacity
             self.power_out_array[t] = self.total_installed_capacity
-            return demand + self.total_installed_capacity
+            return demand + self.total_installed_capacity, flexible_demand
         else:
             self.power_out[t] = abs(demand)
             self.power_out_array[t] = abs(demand)
-            return 0
+            if self.DCdemand:
+                sparecapacity= self.total_installed_capacity - abs(demand)
+                if sparecapacity>flexible_demand:
+                    self.power_out[t] += flexible_demand
+                    self.power_out_array[t] += flexible_demand
+                    flexible_demand = 0
+                else:
+                    flexible_demand -= sparecapacity
+                    self.power_out[t] += sparecapacity
+                    self.power_out_array[t] += sparecapacity
+ 
+            return 0, flexible_demand
 
 
 class Interconnector(GenerationModel):
@@ -451,6 +464,7 @@ class Interconnector(GenerationModel):
         limits=[0, 1000000],
         lifetime=40,
         hurdlerate=0.07,
+        DCdemand=False,
     ):
         """
         == description ==
@@ -499,11 +513,12 @@ class Interconnector(GenerationModel):
         self.total_exported = 0
         self.total_imported = 0
         self.plant_type = gentype
+        self.DCdemand = DCdemand
 
     def __str__(self):
         return f"{self.plant_type} Generator, total capacity: {self.total_installed_capacity} MW"
 
-    def dispatch(self, t, demand):
+    def dispatch(self, t, demand, flexible_demand=0):
         """
         == description ==
         This function dispatches the interconnector in an attempt to meet surplus demand
@@ -511,20 +526,34 @@ class Interconnector(GenerationModel):
         == parameters ==
         t: (int) time index
         demand: (float) demand at time t. This will be a negative value
+        flexible_demand: (float) flexible demand at time t. This will be a positive value, and will be met only if there is remaining capacity
 
         == returns ==
         (float) unmet demand
+        (float) unmetflexible demand
         """
         if demand + self.total_installed_capacity < 0:
             self.power_out[t] = self.total_installed_capacity
             self.power_out_array[t] = self.total_installed_capacity
             self.total_imported += self.total_installed_capacity
-            return demand + self.total_installed_capacity
+            return demand + self.total_installed_capacity, flexible_demand
         else:
             self.power_out[t] = abs(demand)
             self.power_out_array[t] = abs(demand)
-            self.total_imported += abs(demand)
-            return 0
+            if self.DCdemand:
+                sparecapacity = self.total_installed_capacity - abs(demand)
+                if sparecapacity > flexible_demand:
+                    self.power_out[t] += flexible_demand
+                    self.power_out_array[t] += flexible_demand
+                    self.total_imported += flexible_demand
+                    flexible_demand = 0
+                else:
+                    flexible_demand -= sparecapacity
+                    self.power_out[t] += sparecapacity
+                    self.power_out_array[t] += sparecapacity
+                    self.total_imported += sparecapacity
+
+            return 0, flexible_demand
 
     def export(self, t, surplus):
         """
