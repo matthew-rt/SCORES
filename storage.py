@@ -1066,6 +1066,7 @@ class MultipleStorageAssets:
             elif t_surplus < 0:
                 # if the surplus is negative, then we want to discharge the storage assets
                 if self.DispatchEnabled:
+                    thisdispatch=False
                     # we want to see if the energy demand over the time horizon exceeds the energy available from the storage
                     # if it does we will need to dispatch the dispatchable asset
 
@@ -1132,11 +1133,27 @@ class MultipleStorageAssets:
 
                         summedstorelevels = sum(storelevels)
                         if summedstorelevels <= 0:
-                            for DispatchableAsset in self.DispatchableAssetList:
-                                t_surplus = DispatchableAsset.dispatch(t, t_surplus)
-                                remaining_surplus[t] = t_surplus
+                            thisdispatch = True
                             break
-
+                    if thisdispatch:
+                        thisflexibledemand=flexible_demand
+                        # if we need to dispatch the dispatchable asset, we will do so
+                        for DispatchableAsset in self.DispatchableAssetList:
+                            t_surplus, thisflexibledemand = DispatchableAsset.dispatch(
+                                t, t_surplus,thisflexibledemand
+                            )
+                            remaining_surplus[t] = t_surplus
+                        self.flexible_demandtimeseries[t] = (
+                            flexible_demand - thisflexibledemand)
+                    else:
+                        #if we dont need to discharge to avoid shortfall, we might still discharge to power our flexible demand
+                        thisflexibledemand = flexible_demand
+                        for DispatchableAsset in self.DispatchableAssetList:
+                            dummy_surplus, thisflexibledemand = DispatchableAsset.dispatch(
+                                t, 0, thisflexibledemand
+                            )
+                        self.flexible_demandtimeseries[t] = (
+                            flexible_demand - thisflexibledemand)    
                 for i in range(self.n_assets):
                     self.units[i].SOC.append(self.units[i].charge)
 
