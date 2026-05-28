@@ -822,7 +822,7 @@ class TidalStreamTurbineModel(GenerationModel):
     ):
         """
         == description ==
-        Initialises an OffshoreWindModel object. Searches for a saved result at
+        Initialises an TidalStreamTurbine object. Searches for a saved result at
         save_path, otherwise generates a power curve and calculates the
         aggregated power output from turbines at the locations contained in
         sites.
@@ -836,10 +836,10 @@ class TidalStreamTurbineModel(GenerationModel):
         variable_cost: (float) cost incurred per MWh of generation in GBP
         water_density: (float) density of water in kg/m3
         rotor_diameter: (float) rotor diameter in m
-        rated_wind_speed: (float) rated wind speed in m/s
-        v_cut_in: (float) cut in wind speed in m/s
+        rated_wind_speed: (float) rated tidal speed in m/s
+        v_cut_in: (float) cut in tidal speed in m/s
         Cp: (float) power coefficient, assumed constant over flow speeds
-        v_cut_out: (float) cut out wind speed in m/s
+        v_cut_out: (float) cut out tidal speed in m/s
         n_turbine: (Array<int>) number of turbines installed at each site
         turbine_size: (float) size of each turbine in MW
         data_path: (str) path to file containing raw data
