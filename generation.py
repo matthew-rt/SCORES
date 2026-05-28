@@ -894,33 +894,10 @@ class TidalStreamTurbineModel(GenerationModel):
 
         if self.data_path == "":
             raise Exception("model can not be run without a data path")
-        if self.sites[0] == "all":
-            sites = []
-            with open(self.data_path + "site_locs.csv", "r") as csvfile:
-                reader = csv.reader(csvfile)
-                next(reader)
-                for row in reader:
-                    sites.append(int(row[0]))
-            self.sites = sites
-
-        elif self.sites[:2] == "lf":
-            sites = []
-            lwst = str(sites[2:])
-            locs = []
-            # with open(self.save_path+'s_load_factors.csv','r') as csvfile:
-            with open(self.save_path + "tidal_load_factors.csv", "r") as csvfile:
-                reader = csv.reader(csvfile)
-                next(reader)
-                for row in reader:
-                    if float(row[2]) * 100 > lwst:
-                        locs.append([row[0] + row[1]])
-            with open(self.data_path + "site_locs.csv", "r") as csvfile:
-                reader = csv.reader(csvfile)
-                next(reader)
-                for row in reader:
-                    if row[1] + row[2] in locs:
-                        sites.apend(int(row[0]))
-            self.sites = sites
+        if type(self.sites[0])!= int:
+            raise Exception("The sites must be a list of integers")
+        
+        
 
         # If no values given assume an equl distribution of turbines over sites
         if self.n_turbine is None:
@@ -949,43 +926,71 @@ class TidalStreamTurbineModel(GenerationModel):
             if P[i] > self.turbine_size:
                 P[i] = self.turbine_size
 
+        Parray=np.array(P)
         # Next get the tidal data
         for si in range(len(self.sites)):
             site = self.sites[si]
-            with open(self.data_path + str(site) + ".csv", "rU") as csvfile:
-                reader = csv.reader(csvfile)
-                next(reader)
-                for row in reader:
-                    d = datetime.datetime(int(row[0]), int(row[1]), int(row[2]))
-                    if d not in self.date_map:
-                        continue
-                    dn = self.date_map[d]  # day number (int)
-                    hr = int(row[3]) - 1  # hour (int) 0-23
+            site_speeds=[]
 
-                    # skip missing data
-                    if float(row[6]) >= 0:
-                        speed = float(row[6])
-                    else:
-                        continue
+            if self.firstdatadatetime == False:
+                with open(self.data_path + str(site) + ".csv", "r") as file:
+                    loadeddata = file.readlines()
+                    firstrow = loadeddata[1].split(",")
+                    self.firstdatadatetime = datetime.datetime.strptime(
+                        firstrow[0], "%d/%m/%Y %H:%M"
+                    )            
+                    firstdatadatehours = (
+                        self.startdatetime - self.firstdatadatetime
+                    ).total_seconds() / 3600
+                    self.loadindex = int(firstdatadatehours)
+            
+            operationalindex = int(
+                (self.operationaldatetime[si] - self.firstdatadatetime).total_seconds()
+                / 3600
+            )
+            if operationalindex < self.loadindex:
+                rangeselectorindex = self.loadindex
+            else:
+                rangeselectorindex = operationalindex
 
-                    # prevent overload
-                    if speed > v[-1]:
-                        speed = v[-1]
-                    self.max_possible_output += self.turbine_size * self.n_turbine[si]
-                    # interpolate the closest values from the power curve
-                    p1 = int(speed / 0.1)
-                    p2 = p1 + 1
-                    if p2 == len(P):
-                        p2 = p1
-                    f = (speed % 0.1) / 0.1
-                    self.power_out[dn * 24 + hr] += (
-                        f * P[p2] + (1 - f) * P[p1]
-                    ) * self.n_turbine[si]
-                    self.n_good_points[dn * 24 + hr] = 1
+            site_speeds = np.loadtxt(
+                self.data_path + str(site) + ".csv",
+                delimiter=",",
+                skiprows=1,
+                usecols=(2),
+            )
+
+            site_speeds=site_speeds[rangeselectorindex:self.loadindex +len(self.n_good_points)]
+            site_speeds = np.array(site_speeds)
+            site_speeds = site_speeds.astype(float)
+            site_speeds[site_speeds < 0] = 0
+
+
+            site_speeds[site_speeds >= self.v_cut_out] = (
+                self.v_cut_out
+            )  # prevents overload
+            p1s = np.floor(site_speeds / 0.1).astype(
+                int
+            )  # gets the index of the lower bound of the interpolation
+            p2s = p1s + 1  # gets the index of the upper bound of the interpolation
+            p2s[p2s == len(Parray)] = p1s[p2s == len(Parray)]
+            fs = (site_speeds % 0.1) / 0.1
+            poweroutvals = (fs * Parray[p2s] + (1 - fs) * Parray[p1s]) * self.n_turbine[
+                si
+            ]  # interpolates the power output for the entire array
+            self.power_out_array[
+                rangeselectorindex - self.loadindex :
+            ] += poweroutvals  # adds the power output to the total power output array
+            self.max_possible_output += (
+                self.turbine_size * len(poweroutvals) * self.n_turbine[si]
+            )
+        
+    
         # the power values have been generated for each point. However, points with missing data are
         # still zero. The power scaled values, which are initalised at zero. Running self.scale_ouput sorts
         # this out. As we dont want to increase the capacity at this point, we just run scale_output with the
         # currently installed capacity: the values should not change
+        self.power_out=self.power_out_array.tolist()
         self.scale_output(self.total_installed_capacity)
 
 
@@ -1242,7 +1247,7 @@ class OffshoreWindModel(GenerationModel):
                     # Met office format (uncomment to use)
                     #
                     # firstdatadatetime = datetime.datetime(int(firstrow[0]), int(firstrow[1]), int(firstrow[2]), int(firstrow[3]))
-
+    
                     self.firstdatadatetime = firstdatadatetime
                     # find the number of hours between the first date in the data and the first date in the simulation
                     firstdatadatehours = (
