@@ -1,0 +1,77 @@
+site_name: SCORES Documentation
+site_description: >-
+  Documentation for SCORES (Storage and Cost Optimisation for Renewable
+  Energy Systems) - an energy system model for analysing renewable
+  generation and storage requirements.
+site_author: DESNZ SICE
+site_url: https://desnz-sice.github.io/SCORES/
+repo_url: https://github.com/DESNZ-SICE/SCORES
+repo_name: DESNZ-SICE/SCORES
+
+# Kept "false" so every page is a plain .html file. This makes the build
+# portable to systems that serve files directly (including the SharePoint
+# .aspx export - see docs_tools/export_aspx.py).
+use_directory_urls: false
+
+theme:
+  name: material
+  palette:
+    - scheme: default
+      primary: teal
+      accent: deep orange
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+    - scheme: slate
+      primary: teal
+      accent: deep orange
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
+  features:
+    - navigation.sections
+    - navigation.top
+    - navigation.footer
+    - content.code.copy
+    - search.suggest
+
+markdown_extensions:
+  - admonition
+  - attr_list
+  - tables
+  - toc:
+      permalink: true
+  - pymdownx.details
+  - pymdownx.highlight
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
+
+nav:
+  - Home: index.md
+  - Getting started:
+      - Installation: getting-started/installation.md
+      - Getting the data: getting-started/data.md
+      - Quickstart: getting-started/quickstart.md
+  - User guide:
+      - Model architecture: user-guide/architecture.md
+      - Generation models: user-guide/generation.md
+      - Storage models: user-guide/storage.md
+      - Electricity systems: user-guide/system.md
+      - Linear-programme optimisation: user-guide/optimisation.md
+      - Electric vehicle fleets: user-guide/evs.md
+      - Cost parameters: user-guide/costs.md
+      - Maps and load factors: user-guide/maps.md
+  - Tutorials:
+      - Overview: tutorials/index.md
+      - 1. Your first generation model: tutorials/01-first-generation-model.md
+      - 2. Adding storage: tutorials/02-adding-storage.md
+      - 3. A whole-system study: tutorials/03-whole-system.md
+      - 4. Sizing with the linear programme: tutorials/04-linear-programming.md
+      - 5. Electric vehicle fleets: tutorials/05-electric-vehicles.md
+  - Reference:
+      - Repository file guide: reference/file-guide.md
+      - Troubleshooting: reference/troubleshooting.md
+  - Maintaining these docs: maintaining.md

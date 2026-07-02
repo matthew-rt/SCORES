@@ -9,3 +9,8 @@ plottingoutputs/
 credentials.py
 .DS_Store
 *.xlsx
+# documentation build artefacts (sources live in docs/)
+site/
+site_aspx/
+# local working notes
+BUGREPORT.md
