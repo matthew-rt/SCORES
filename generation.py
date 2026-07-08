@@ -819,6 +819,7 @@ class TidalStreamTurbineModel(GenerationModel):
         data_path="",
         save_path="stored_model_runs/",
         save=False,
+        force_run=True
     ):
         """
         == description ==
@@ -852,13 +853,12 @@ class TidalStreamTurbineModel(GenerationModel):
         super().__init__(
             sites,
             "Tidal Stream",
-            "",
+            "Tidal Stream Energy",
             data_path=data_path,
             year_min=year_min,
             year_max=year_max,
-            fixed_cost=fixed_cost,
-            variable_cost=variable_cost,
-            months=months,
+            cost_params_file="params/SCORES Cost assumptions.xlsx",
+            cost_year=2025,
             limits=[0, 1000000],
         )
 
@@ -875,7 +875,7 @@ class TidalStreamTurbineModel(GenerationModel):
         if file_name == "":
             save = False
 
-        if self.check_for_saved_run(self.save_path + file_name) is False:
+        if self.check_for_saved_run(self.save_path + file_name) is False or force_run is True:
             self.run_model()
             if save is True:
                 self.save_run(self.save_path + file_name)
@@ -964,7 +964,7 @@ class TidalStreamTurbineModel(GenerationModel):
             site_speeds = np.array(site_speeds)
             site_speeds = site_speeds.astype(float)
             site_speeds[site_speeds < 0] = 0
-
+            print(f"Max site speed: {np.max(site_speeds)}")
 
             site_speeds[site_speeds >= self.v_cut_out] = (
                 self.v_cut_out
