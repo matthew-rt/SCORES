@@ -972,6 +972,7 @@ class MultipleStorageAssets:
         return_output=False,
         start_up_time=0,
         return_di_av=False,
+        flexible_demand=0
     ):
         """
         == description ==
@@ -1002,6 +1003,7 @@ class MultipleStorageAssets:
         remaining_surplus = [0] * len(
             surplus
         )  # keeps track of the remaining surplus after each timestep
+        self.flexible_demandtimeseries=[0]* len(surplus)  # keeps track of the flexible demand timeseries
         self.curtarray = np.zeros(
             len(surplus)
         )  # keeps track of the total surplus that could not be stored
@@ -1041,7 +1043,12 @@ class MultipleStorageAssets:
             self.self_discharge_timestep()
 
             t_surplus = copy.deepcopy(surplus[t])
-
+            if t_surplus>flexible_demand:
+                t_surplus -= flexible_demand
+                self.flexible_demandtimeseries[t] = flexible_demand
+            elif t_surplus>0:
+                self.flexible_demandtimeseries[t] = t_surplus
+                t_surplus = 0
             if t_surplus > 0:
                 # if the surplus is positive, then we want to charge the storage assets
                 for i in range(self.n_assets):
@@ -1066,6 +1073,7 @@ class MultipleStorageAssets:
             elif t_surplus < 0:
                 # if the surplus is negative, then we want to discharge the storage assets
                 if self.DispatchEnabled:
+                    thisdispatch=False
                     # we want to see if the energy demand over the time horizon exceeds the energy available from the storage
                     # if it does we will need to dispatch the dispatchable asset
 
@@ -1132,11 +1140,27 @@ class MultipleStorageAssets:
 
                         summedstorelevels = sum(storelevels)
                         if summedstorelevels <= 0:
-                            for DispatchableAsset in self.DispatchableAssetList:
-                                t_surplus = DispatchableAsset.dispatch(t, t_surplus)
-                                remaining_surplus[t] = t_surplus
+                            thisdispatch = True
                             break
-
+                    if thisdispatch:
+                        thisflexibledemand=flexible_demand
+                        # if we need to dispatch the dispatchable asset, we will do so
+                        for DispatchableAsset in self.DispatchableAssetList:
+                            t_surplus, thisflexibledemand = DispatchableAsset.dispatch(
+                                t, t_surplus,thisflexibledemand
+                            )
+                            remaining_surplus[t] = t_surplus
+                        self.flexible_demandtimeseries[t] = (
+                            flexible_demand - thisflexibledemand)
+                    else:
+                        #if we dont need to discharge to avoid shortfall, we might still discharge to power our flexible demand
+                        thisflexibledemand = flexible_demand
+                        for DispatchableAsset in self.DispatchableAssetList:
+                            dummy_surplus, thisflexibledemand = DispatchableAsset.dispatch(
+                                t, 0, thisflexibledemand
+                            )
+                        self.flexible_demandtimeseries[t] = (
+                            flexible_demand - thisflexibledemand)    
                 for i in range(self.n_assets):
                     self.units[i].SOC.append(self.units[i].charge)
 
@@ -1186,6 +1210,7 @@ class MultipleStorageAssets:
         start_up_time=0,
         strategy="ordered",
         return_di_av=False,
+        flexible_demand=0,
     ):
         """
         == description ==
@@ -1215,6 +1240,7 @@ class MultipleStorageAssets:
                 return_output=return_output,
                 start_up_time=start_up_time,
                 return_di_av=return_di_av,
+                flexible_demand=flexible_demand,
             )
         self.actual_reliability = res
         return res

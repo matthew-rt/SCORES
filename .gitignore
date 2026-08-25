@@ -2,13 +2,12 @@ log/*
 *.pyc
 *.csv
 stored_model_runs/
-params/
 scripts/*.py
 local*
 plottingoutputs/
 credentials.py
 .DS_Store
-*.xlsx
+
 # documentation build artefacts (sources live in docs/)
 site/
 site_aspx/
